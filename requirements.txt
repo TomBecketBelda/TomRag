@@ -1,8 +1,8 @@
-flask
-chromadb
-sentence-transformers
-llama-cpp-python
-pypdf
-pymupdf
-pdf2image
-pytesseract
+Flask>=3.1.3
+chromadb>=1.5.2
+sentence-transformers>=5.1.2
+llama-cpp-python>=0.3.16
+pypdf>=6.7.4
+PyMuPDF>=1.26.5
+pdf2image>=1.17.0
+pytesseract>=0.3.13
