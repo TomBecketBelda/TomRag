@@ -2,3 +2,11 @@
 __pycache__/
 *.pyc
 .DS_Store
+
+# Python envs
+venv/
+.env
+
+# Local model artifacts
+modelos/*.gguf
+modelos/**/*.gguf
