@@ -2,7 +2,11 @@ const chat = document.getElementById("chat");
 const form = document.getElementById("f");
 const q = document.getElementById("q");
 const clearBtn = document.getElementById("clear");
+const newChatBtn = document.getElementById("new-chat");
 const historyList = document.getElementById("history-list");
+
+let conversations = [];
+let currentConversationId = null;
 
 function addMsg(role, text, fuentes) {
   const div = document.createElement("div");
@@ -18,36 +22,6 @@ function addMsg(role, text, fuentes) {
   chat.scrollTop = chat.scrollHeight;
 }
 
-function renderHistorySidebar(messages) {
-  historyList.innerHTML = "";
-  if (!messages.length) {
-    const empty = document.createElement("div");
-    empty.className = "history-item";
-    empty.textContent = "Sin mensajes guardados.";
-    historyList.appendChild(empty);
-    return;
-  }
-
-  for (const m of messages) {
-    const item = document.createElement("div");
-    item.className = "history-item";
-
-    const meta = document.createElement("div");
-    meta.className = "history-meta";
-    const role = m.role === "user" ? "Tu" : "Asistente";
-    const date = m.created_at ? new Date(m.created_at).toLocaleString() : "";
-    meta.textContent = role + (date ? " - " + date : "");
-
-    const text = document.createElement("div");
-    text.className = "history-text";
-    text.textContent = m.content || "";
-
-    item.appendChild(meta);
-    item.appendChild(text);
-    historyList.appendChild(item);
-  }
-}
-
 function renderChat(messages) {
   chat.innerHTML = "";
   for (const m of messages) {
@@ -56,9 +30,76 @@ function renderChat(messages) {
   }
 }
 
-async function fetchHistory() {
+function previewText(conversation) {
+  const last = (conversation.last_message || "").trim();
+  if (last) return last;
+  return "Sin mensajes";
+}
+
+function renderConversations() {
+  historyList.innerHTML = "";
+  if (!conversations.length) {
+    const empty = document.createElement("div");
+    empty.className = "history-item";
+    empty.textContent = "No hay chats todavía.";
+    historyList.appendChild(empty);
+    return;
+  }
+
+  for (const c of conversations) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "history-item history-chat";
+    if (c.id === currentConversationId) item.classList.add("active");
+    item.dataset.id = String(c.id);
+
+    const meta = document.createElement("div");
+    meta.className = "history-meta";
+    const date = c.updated_at ? new Date(c.updated_at).toLocaleString() : "";
+    const count = Number(c.message_count || 0);
+    meta.textContent = (c.title || "Nuevo chat") + " - " + count + " msg" + (date ? " - " + date : "");
+
+    const text = document.createElement("div");
+    text.className = "history-text";
+    text.textContent = previewText(c);
+
+    item.appendChild(meta);
+    item.appendChild(text);
+    item.addEventListener("click", () => {
+      void selectConversation(c.id);
+    });
+    historyList.appendChild(item);
+  }
+}
+
+async function fetchConversations() {
   try {
-    const r = await fetch("/api/history");
+    const r = await fetch("/api/conversations");
+    const data = await r.json();
+    if (!r.ok || !Array.isArray(data.conversations)) return [];
+    return data.conversations;
+  } catch (_) {
+    return [];
+  }
+}
+
+async function createConversation() {
+  const r = await fetch("/api/conversations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({})
+  });
+  const data = await r.json();
+  if (!r.ok || !data.conversation || typeof data.conversation.id !== "number") {
+    throw new Error(data.error || "No se pudo crear el chat");
+  }
+  return data.conversation;
+}
+
+async function fetchHistory(conversationId) {
+  if (typeof conversationId !== "number") return [];
+  try {
+    const r = await fetch("/api/history?conversation_id=" + encodeURIComponent(conversationId));
     const data = await r.json();
     if (!r.ok || !Array.isArray(data.messages)) return [];
     return data.messages;
@@ -67,23 +108,43 @@ async function fetchHistory() {
   }
 }
 
-async function cargarHistorial() {
-  const messages = await fetchHistory();
+async function refreshConversations() {
+  conversations = await fetchConversations();
+  renderConversations();
+}
+
+async function selectConversation(conversationId) {
+  currentConversationId = conversationId;
+  renderConversations();
+  const messages = await fetchHistory(conversationId);
   renderChat(messages);
-  renderHistorySidebar(messages);
+}
+
+async function ensureConversationSelected() {
+  await refreshConversations();
+  if (!conversations.length) {
+    const created = await createConversation();
+    conversations = [created];
+  }
+  if (!currentConversationId || !conversations.some((c) => c.id === currentConversationId)) {
+    currentConversationId = conversations[0].id;
+  }
+  renderConversations();
+  await selectConversation(currentConversationId);
 }
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const pregunta = q.value.trim();
   if (!pregunta) return;
+  if (!currentConversationId) await ensureConversationSelected();
   addMsg("Tu", pregunta);
   q.value = "";
   try {
     const r = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pregunta })
+      body: JSON.stringify({ pregunta, conversation_id: currentConversationId })
     });
 
     let data = {};
@@ -99,23 +160,41 @@ form.addEventListener("submit", async (e) => {
       return;
     }
 
+    if (typeof data.conversation_id === "number") {
+      currentConversationId = data.conversation_id;
+    }
     addMsg("Asistente", data.respuesta || "No se pudo responder.", data.fuentes || []);
-    const messages = await fetchHistory();
-    renderHistorySidebar(messages);
+    await refreshConversations();
   } catch (err) {
     addMsg("Asistente", "Error de red o del servidor: " + (err?.message || err), []);
   }
 });
 
 clearBtn.addEventListener("click", async () => {
+  if (!currentConversationId) return;
   try {
-    const r = await fetch("/api/history", { method: "DELETE" });
+    const r = await fetch(
+      "/api/history?conversation_id=" + encodeURIComponent(currentConversationId),
+      { method: "DELETE" }
+    );
     if (r.ok) {
       chat.innerHTML = "";
-      renderHistorySidebar([]);
-      addMsg("Asistente", "Historial eliminado.", []);
+      addMsg("Asistente", "Chat limpiado.", []);
+      await refreshConversations();
     }
   } catch (_) {}
 });
 
-cargarHistorial();
+newChatBtn.addEventListener("click", async () => {
+  try {
+    const created = await createConversation();
+    currentConversationId = created.id;
+    await refreshConversations();
+    renderChat([]);
+    renderConversations();
+  } catch (err) {
+    addMsg("Asistente", "No se pudo crear un nuevo chat: " + (err?.message || err), []);
+  }
+});
+
+void ensureConversationSelected();
