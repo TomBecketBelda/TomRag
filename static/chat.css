@@ -78,6 +78,14 @@ body {
   transition: transform 140ms ease, box-shadow 180ms ease, border-color 180ms ease, background 180ms ease;
 }
 
+.history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
 .history-chat:hover {
   transform: translateY(-1px);
   border-color: var(--red-500);
@@ -93,8 +101,24 @@ body {
 .history-meta {
   font-size: 12px;
   color: #7f2d35;
-  margin-bottom: 4px;
   font-weight: 700;
+}
+
+.delete-conversation {
+  border: 1px solid #cf7e86;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.74rem;
+  line-height: 1;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(180deg, #c24452, #9a2533);
+  box-shadow: none;
+}
+
+.delete-conversation:hover {
+  transform: none;
+  filter: brightness(1.08);
 }
 
 .history-text {

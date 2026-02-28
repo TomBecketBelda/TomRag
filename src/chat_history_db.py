@@ -129,6 +129,20 @@ def list_conversations(limit: int = 100) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def delete_conversation(conversation_id: int) -> bool:
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT id FROM chat_conversations WHERE id = ?",
+            (conversation_id,),
+        ).fetchone()
+        if not row:
+            return False
+
+        conn.execute("DELETE FROM chat_messages WHERE conversation_id = ?", (conversation_id,))
+        conn.execute("DELETE FROM chat_conversations WHERE id = ?", (conversation_id,))
+    return True
+
+
 def get_or_create_default_conversation_id() -> int:
     with db_conn() as conn:
         return _ensure_default_conversation(conn)

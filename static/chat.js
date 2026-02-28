@@ -50,23 +50,36 @@ function renderConversations() {
   }
 
   for (const c of conversations) {
-    const item = document.createElement("button");
-    item.type = "button";
+    const item = document.createElement("div");
     item.className = "history-item history-chat";
     if (c.id === currentConversationId) item.classList.add("active");
     item.dataset.id = String(c.id);
+
+    const head = document.createElement("div");
+    head.className = "history-head";
 
     const meta = document.createElement("div");
     meta.className = "history-meta";
     const date = c.updated_at ? new Date(c.updated_at).toLocaleString() : "";
     const count = Number(c.message_count || 0);
     meta.textContent = (c.title || "Nuevo chat") + " - " + count + " msg" + (date ? " - " + date : "");
+    head.appendChild(meta);
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "delete-conversation";
+    deleteBtn.textContent = "Eliminar";
+    deleteBtn.addEventListener("click", async (ev) => {
+      ev.stopPropagation();
+      await deleteConversation(c.id);
+    });
+    head.appendChild(deleteBtn);
 
     const text = document.createElement("div");
     text.className = "history-text";
     text.textContent = previewText(c);
 
-    item.appendChild(meta);
+    item.appendChild(head);
     item.appendChild(text);
     item.addEventListener("click", () => {
       void selectConversation(c.id);
@@ -97,6 +110,22 @@ async function createConversation() {
     throw new Error(data.error || "No se pudo crear el chat");
   }
   return data.conversation;
+}
+
+async function deleteConversationById(conversationId) {
+  const r = await fetch("/api/conversations/" + encodeURIComponent(conversationId), {
+    method: "DELETE"
+  });
+  let data = {};
+  try {
+    data = await r.json();
+  } catch (_) {
+    data = {};
+  }
+  if (!r.ok) {
+    throw new Error(data.error || ("Error HTTP " + r.status));
+  }
+  return data;
 }
 
 async function fetchHistory(conversationId) {
@@ -134,6 +163,32 @@ async function ensureConversationSelected() {
   }
   renderConversations();
   await selectConversation(currentConversationId);
+}
+
+async function deleteConversation(conversationId) {
+  const convo = conversations.find((c) => c.id === conversationId);
+  const nombre = convo?.title || ("Chat " + conversationId);
+  const ok = window.confirm("¿Eliminar '" + nombre + "'? Esta acción borra sus mensajes.");
+  if (!ok) return;
+
+  try {
+    const data = await deleteConversationById(conversationId);
+    const nextId = typeof data.next_conversation_id === "number" ? data.next_conversation_id : null;
+
+    await refreshConversations();
+    if (conversationId === currentConversationId) {
+      currentConversationId = nextId;
+      if (currentConversationId) {
+        await selectConversation(currentConversationId);
+      } else {
+        await ensureConversationSelected();
+      }
+    } else {
+      renderConversations();
+    }
+  } catch (err) {
+    addMsg("Asistente", "No se pudo eliminar el chat: " + (err?.message || err), []);
+  }
 }
 
 form.addEventListener("submit", async (e) => {

@@ -5,6 +5,7 @@ from flask import Flask, jsonify, render_template, request
 from .chat_history_db import (
     clear_history,
     create_conversation,
+    delete_conversation,
     get_or_create_default_conversation_id,
     list_conversations,
     load_history,
@@ -81,3 +82,22 @@ def api_conversations_create():
     title = body.get("title")
     conversation = create_conversation(title if isinstance(title, str) else None)
     return jsonify({"conversation": conversation}), 201
+
+
+@app.route("/api/conversations/<int:conversation_id>", methods=["DELETE"])
+def api_conversations_delete(conversation_id: int):
+    deleted = delete_conversation(conversation_id)
+    if not deleted:
+        return jsonify({"ok": False, "error": "Conversación no encontrada"}), 404
+
+    conversaciones = list_conversations(limit=1)
+    if conversaciones:
+        next_conversation_id = conversaciones[0]["id"]
+    else:
+        next_conversation_id = get_or_create_default_conversation_id()
+
+    return jsonify({
+        "ok": True,
+        "deleted_conversation_id": conversation_id,
+        "next_conversation_id": next_conversation_id,
+    })
