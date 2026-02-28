@@ -1,0 +1,28 @@
+Inteligencia Artificial - Conceptos Básicos
+
+La inteligencia artificial (IA) es la simulación de procesos de inteligencia humana por parte de sistemas informáticos. Estos procesos incluyen el aprendizaje, el razonamiento y la autocorrección.
+
+Tipos de Inteligencia Artificial:
+- IA Débil (Narrow AI): diseñada para realizar tareas específicas, como el reconocimiento de voz o la recomendación de productos.
+- IA Fuerte (General AI): hipotética IA con capacidades cognitivas similares a las humanas.
+- Superinteligencia: IA que superaría la inteligencia humana en todos los aspectos.
+
+Machine Learning (Aprendizaje Automático):
+El machine learning es una rama de la IA que permite a los sistemas aprender y mejorar automáticamente a partir de la experiencia sin ser programados explícitamente. Utiliza algoritmos para analizar datos, aprender de ellos y tomar decisiones.
+
+Deep Learning (Aprendizaje Profundo):
+El deep learning es un subcampo del machine learning basado en redes neuronales artificiales con muchas capas. Es especialmente útil para tareas de reconocimiento de imágenes, procesamiento de lenguaje natural y síntesis de voz.
+
+Modelos de Lenguaje (LLMs):
+Los Large Language Models (LLMs) son modelos de IA entrenados en grandes cantidades de texto. Pueden generar texto, responder preguntas, traducir idiomas y realizar muchas otras tareas relacionadas con el lenguaje. Ejemplos populares son GPT, Llama y Mistral.
+
+RAG (Retrieval-Augmented Generation):
+RAG es una técnica que combina la recuperación de información con la generación de texto. En lugar de depender únicamente del conocimiento interno del modelo, RAG busca información relevante en una base de datos externa y la usa como contexto para generar respuestas más precisas y actualizadas.
+
+Aplicaciones de la IA:
+- Asistentes virtuales (Siri, Alexa, Google Assistant)
+- Diagnóstico médico
+- Vehículos autónomos
+- Detección de fraudes bancarios
+- Traducción automática
+- Generación de contenido

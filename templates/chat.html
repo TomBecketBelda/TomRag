@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chat RAG Flask</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <h2>Historial</h2>
+      <div id="history-list" class="history-list"></div>
+    </aside>
+
+    <main class="main">
+      <h1>Chat TOM</h1>
+      <p>Usa <code>chat_rag.py</code> como motor de respuestas.</p>
+      <div id="chat"></div>
+      <form id="f">
+        <input id="q" placeholder="Escribe tu pregunta..." autocomplete="off" />
+        <button type="submit">Enviar</button>
+        <button type="button" id="clear">Limpiar historial</button>
+      </form>
+    </main>
+  </div>
+
+  <script src="{{ url_for('static', filename='chat.js') }}"></script>
+</body>
+</html>
