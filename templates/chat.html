@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Chat RAG Flask</title>
+  <title>Chat TOM</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
 </head>
 <body>
@@ -17,8 +17,21 @@
     </aside>
 
     <main class="main">
-      <h1>Chat TOM</h1>
-      <p>Usa <code>chat_rag.py</code> como motor de respuestas.</p>
+      <header class="brand">
+        <div class="brand-logo" aria-hidden="true">
+          <svg viewBox="0 0 64 64" role="img">
+            <path d="M32 4c-9 0-16 7.2-16 16v7.5c0 8.9 7.1 16.1 16 16.1s16-7.2 16-16.1V20c0-8.8-7-16-16-16z" fill="#7a0f16"/>
+            <path d="M32 8c-6.8 0-12.2 5.4-12.2 12.2v7.1c0 6.8 5.4 12.2 12.2 12.2s12.2-5.4 12.2-12.2v-7.1C44.2 13.4 38.8 8 32 8z" fill="#fff5f4"/>
+            <path d="M30 13h4v18h-4zM23 20h18v4H23z" fill="#7a0f16"/>
+            <path d="M16 49c5-3.3 10.7-5 16-5s11 1.7 16 5v7H16z" fill="#7a0f16"/>
+            <circle cx="32" cy="50.5" r="4.5" fill="#fff5f4"/>
+          </svg>
+        </div>
+        <div>
+          <h1>Chat TOM</h1>
+          <p>Asistente documental con memoria por conversaciones.</p>
+        </div>
+      </header>
       <div id="chat"></div>
       <form id="f">
         <input id="q" placeholder="Escribe tu pregunta..." autocomplete="off" />
