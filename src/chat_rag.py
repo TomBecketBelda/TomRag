@@ -8,10 +8,12 @@ import chromadb
 from pathlib import Path
 from sentence_transformers import SentenceTransformer
 from llama_cpp import Llama
+import os
 
 # Configuración
 ROOT_DIR = Path(__file__).resolve().parent.parent
-MODEL_PATH = str(ROOT_DIR / "modelos" / "Llama-3.2-1B-Instruct-Q4_K_M.gguf")
+DEFAULT_MODEL_PATH = ROOT_DIR / "modelos" / "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
+MODEL_PATH = os.getenv("LLAMA_MODEL_PATH", str(DEFAULT_MODEL_PATH))
 DB_PATH = str(ROOT_DIR / "vectordb")
 N_RESULTADOS = 3
 MAX_TOKENS = 512
@@ -34,6 +36,17 @@ def inicializar_modelos() -> None:
     print("⏳ Cargando modelos (puede tardar unos segundos)...")
 
     embedder = SentenceTransformer("all-MiniLM-L6-v2")
+    if not Path(MODEL_PATH).exists():
+        raise FileNotFoundError(
+            "No se encontró el modelo GGUF 8B en:\n"
+            f"  {MODEL_PATH}\n\n"
+            "Descárgalo desde Hugging Face:\n"
+            "  https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF\n"
+            "Archivo recomendado:\n"
+            "  Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf\n\n"
+            "También puedes usar otra ruta con la variable de entorno LLAMA_MODEL_PATH."
+        )
+
     llm = Llama(
         model_path=MODEL_PATH,
         n_ctx=4096,
