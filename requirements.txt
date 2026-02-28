@@ -1,0 +1,8 @@
+flask
+chromadb
+sentence-transformers
+llama-cpp-python
+pypdf
+pymupdf
+pdf2image
+pytesseract
