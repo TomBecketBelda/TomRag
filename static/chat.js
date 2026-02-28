@@ -31,8 +31,11 @@ function renderChat(messages) {
 }
 
 function previewText(conversation) {
-  const last = (conversation.last_message || "").trim();
-  if (last) return last;
+  const last = String(conversation.last_message || "").replace(/\s+/g, " ").trim();
+  if (last) {
+    const MAX = 90;
+    return last.length > MAX ? last.slice(0, MAX - 1) + "…" : last;
+  }
   return "Sin mensajes";
 }
 
