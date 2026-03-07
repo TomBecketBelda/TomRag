@@ -2,6 +2,7 @@
   function createUserManager(options) {
     const userSelect = options.userSelect;
     const registerUserBtn = options.registerUserBtn;
+    const deleteUserBtn = options.deleteUserBtn;
     const onInfo = typeof options.onInfo === "function" ? options.onInfo : function () {};
 
     let users = [];
@@ -16,6 +17,7 @@
         userSelect.appendChild(opt);
         currentUserId = null;
         userSelect.disabled = true;
+        if (deleteUserBtn) deleteUserBtn.disabled = true;
         return;
       }
 
@@ -32,6 +34,9 @@
         currentUserId = users[0].id;
         userSelect.value = String(currentUserId);
       }
+
+      const currentName = users.find((u) => u.id === currentUserId)?.name || "";
+      if (deleteUserBtn) deleteUserBtn.disabled = !currentUserId || currentName.toLowerCase() === "llm";
     }
 
     async function fetchUsers() {
@@ -65,6 +70,24 @@
       return data.user;
     }
 
+    async function deleteUser(userId) {
+      const r = await fetch("/api/users/" + encodeURIComponent(userId), {
+        method: "DELETE"
+      });
+
+      let data = {};
+      try {
+        data = await r.json();
+      } catch (_) {
+        data = {};
+      }
+
+      if (!r.ok) {
+        throw new Error(data.error || "No se pudo borrar el usuario");
+      }
+      return data;
+    }
+
     async function refreshUsers() {
       users = await fetchUsers();
       renderUsers();
@@ -94,6 +117,7 @@
         const value = Number(userSelect.value);
         if (Number.isInteger(value) && value > 0) {
           currentUserId = value;
+          renderUsers();
         }
       });
 
@@ -106,11 +130,29 @@
           await refreshUsers();
           currentUserId = user.id;
           userSelect.value = String(currentUserId);
+          renderUsers();
           onInfo("Usuario registrado: " + user.name);
         } catch (err) {
           onInfo("No se pudo registrar el usuario: " + (err?.message || err));
         }
       });
+
+      if (deleteUserBtn) {
+        deleteUserBtn.addEventListener("click", async () => {
+          if (!currentUserId) return;
+          const name = users.find((u) => u.id === currentUserId)?.name || "este usuario";
+          const ok = window.confirm("¿Borrar '" + name + "'? Sus mensajes se conservarán sin autor.");
+          if (!ok) return;
+
+          try {
+            await deleteUser(currentUserId);
+            await refreshUsers();
+            onInfo("Usuario borrado: " + name);
+          } catch (err) {
+            onInfo("No se pudo borrar el usuario: " + (err?.message || err));
+          }
+        });
+      }
     }
 
     return {

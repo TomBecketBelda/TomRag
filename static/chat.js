@@ -6,9 +6,11 @@ const newChatBtn = document.getElementById("new-chat");
 const historyList = document.getElementById("history-list");
 const userSelect = document.getElementById("user-select");
 const registerUserBtn = document.getElementById("register-user");
+const deleteUserBtn = document.getElementById("delete-user");
 
 let conversations = [];
 let currentConversationId = null;
+let lastRenderedMessageId = null;
 
 function addMsg(role, text, fuentes, isUser = false) {
   const div = document.createElement("div");
@@ -28,9 +30,11 @@ function renderChat(messages) {
   chat.innerHTML = "";
   for (const m of messages) {
     const isUser = m.role === "user";
-    const role = isUser ? (m.user_name || "Usuario") : "Asistente";
+    const role = m.user_name || (isUser ? "Usuario" : "Asistente");
     addMsg(role, m.content || "", m.sources || [], isUser);
   }
+  const last = messages[messages.length - 1];
+  lastRenderedMessageId = last ? Number(last.id || 0) : 0;
 }
 
 function previewText(conversation) {
@@ -155,6 +159,17 @@ async function selectConversation(conversationId) {
   renderChat(messages);
 }
 
+async function syncCurrentConversation() {
+  if (!currentConversationId) return;
+  const messages = await fetchHistory(currentConversationId);
+  const last = messages[messages.length - 1];
+  const nextLastId = last ? Number(last.id || 0) : 0;
+  if (nextLastId !== lastRenderedMessageId) {
+    renderChat(messages);
+    await refreshConversations();
+  }
+}
+
 async function ensureConversationSelected() {
   await refreshConversations();
   if (!conversations.length) {
@@ -197,27 +212,25 @@ async function deleteConversation(conversationId) {
 const userManager = window.createUserManager({
   userSelect,
   registerUserBtn,
+  deleteUserBtn,
   onInfo: (text) => addMsg("Asistente", text, [])
 });
 userManager.bindEvents();
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const pregunta = q.value.trim();
-  if (!pregunta) return;
+  const content = q.value.trim();
+  if (!content) return;
   if (!currentConversationId) await ensureConversationSelected();
   if (!userManager.getCurrentUserId()) await userManager.ensureUserSelected();
 
   const currentUserId = userManager.getCurrentUserId();
-  const userName = userManager.getCurrentUserName();
-
-  addMsg(userName, pregunta, [], true);
   q.value = "";
   try {
-    const r = await fetch("/api/chat", {
+    const r = await fetch("/api/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pregunta, conversation_id: currentConversationId, user_id: currentUserId })
+      body: JSON.stringify({ content, conversation_id: currentConversationId, user_id: currentUserId })
     });
 
     let data = {};
@@ -228,18 +241,17 @@ form.addEventListener("submit", async (e) => {
     }
 
     if (!r.ok) {
-      const msg = data.error || data.respuesta || ("Error HTTP " + r.status);
-      addMsg("Asistente", msg, []);
+      const msg = data.error || ("Error HTTP " + r.status);
+      addMsg("Sistema", msg, []);
       return;
     }
 
     if (typeof data.conversation_id === "number") {
       currentConversationId = data.conversation_id;
     }
-    addMsg("Asistente", data.respuesta || "No se pudo responder.", data.fuentes || []);
-    await refreshConversations();
+    await syncCurrentConversation();
   } catch (err) {
-    addMsg("Asistente", "Error de red o del servidor: " + (err?.message || err), []);
+    addMsg("Sistema", "Error de red o del servidor: " + (err?.message || err), []);
   }
 });
 
@@ -274,3 +286,7 @@ newChatBtn.addEventListener("click", async () => {
   await userManager.ensureUserSelected();
   await ensureConversationSelected();
 })();
+
+setInterval(() => {
+  void syncCurrentConversation();
+}, 2000);

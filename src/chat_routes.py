@@ -4,6 +4,7 @@ from .chat_history_db import (
     clear_history,
     create_conversation,
     create_user,
+    delete_user,
     delete_conversation,
     get_or_create_default_conversation_id,
     list_conversations,
@@ -48,6 +49,60 @@ def register_chat_routes(app) -> None:
                 "fuentes": [],
             }), 500
 
+    @app.route("/api/messages", methods=["POST"])
+    def api_messages_create():
+        body = request.get_json(silent=True) or {}
+        content = (body.get("content") or "").strip()
+        raw_conversation_id = body.get("conversation_id")
+        raw_user_id = body.get("user_id")
+        conversation_id = raw_conversation_id if isinstance(raw_conversation_id, int) else None
+        user_id = raw_user_id if isinstance(raw_user_id, int) else None
+
+        if not content:
+            return jsonify({"error": "El mensaje no puede estar vacío"}), 400
+        if user_id is None:
+            return jsonify({"error": "Debes seleccionar un usuario"}), 400
+
+        conversation_id = save_message(
+            "user",
+            content,
+            [],
+            conversation_id=conversation_id,
+            user_id=user_id,
+        )
+        try:
+            llm_user = create_user("LLM")
+            llm_user_id = llm_user.get("id") if isinstance(llm_user, dict) else None
+            salida = generar_respuesta(content)
+            respuesta = (salida.get("respuesta") or "").strip()
+            if respuesta:
+                conversation_id = save_message(
+                    "assistant",
+                    respuesta,
+                    salida.get("fuentes", []),
+                    conversation_id=conversation_id,
+                    user_id=llm_user_id if isinstance(llm_user_id, int) else None,
+                )
+            return jsonify({
+                "ok": True,
+                "conversation_id": conversation_id,
+                "llm_responded": bool(respuesta),
+            }), 201
+        except Exception as e:
+            app.logger.exception("Fallo en respuesta LLM para /api/messages")
+            save_message(
+                "assistant",
+                f"No se pudo generar respuesta del LLM: {e}",
+                [],
+                conversation_id=conversation_id,
+            )
+            return jsonify({
+                "ok": True,
+                "conversation_id": conversation_id,
+                "llm_responded": False,
+                "warning": str(e),
+            }), 201
+
     @app.route("/api/history", methods=["GET"])
     def api_history():
         raw_conversation_id = request.args.get("conversation_id", default=None, type=int)
@@ -89,6 +144,17 @@ def register_chat_routes(app) -> None:
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 400
         return jsonify({"user": user}), 201
+
+    @app.route("/api/users/<int:user_id>", methods=["DELETE"])
+    def api_users_delete(user_id: int):
+        try:
+            deleted = delete_user(user_id)
+        except ValueError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+
+        if not deleted:
+            return jsonify({"ok": False, "error": "Usuario no encontrado"}), 404
+        return jsonify({"ok": True, "deleted_user_id": user_id})
 
     @app.route("/api/conversations/<int:conversation_id>", methods=["DELETE"])
     def api_conversations_delete(conversation_id: int):

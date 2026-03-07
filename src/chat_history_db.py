@@ -122,6 +122,23 @@ def create_user(name: str) -> dict:
     return dict(row) if row else {"id": user_id, "name": final_name, "created_at": now}
 
 
+def delete_user(user_id: int) -> bool:
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT id, name FROM chat_users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+        if not row:
+            return False
+
+        if (row["name"] or "").strip().lower() == "llm":
+            raise ValueError("No se puede borrar el usuario LLM")
+
+        conn.execute("UPDATE chat_messages SET user_id = NULL WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM chat_users WHERE id = ?", (user_id,))
+    return True
+
+
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
