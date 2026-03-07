@@ -9,8 +9,9 @@
     let currentUserId = null;
 
     function renderUsers() {
+      const visibleUsers = users.filter((u) => (u.name || "").trim().toLowerCase() !== "llm");
       userSelect.innerHTML = "";
-      if (!users.length) {
+      if (!visibleUsers.length) {
         const opt = document.createElement("option");
         opt.value = "";
         opt.textContent = "Sin usuarios";
@@ -22,7 +23,7 @@
       }
 
       userSelect.disabled = false;
-      for (const user of users) {
+      for (const user of visibleUsers) {
         const opt = document.createElement("option");
         opt.value = String(user.id);
         opt.textContent = user.name;
@@ -30,8 +31,8 @@
         userSelect.appendChild(opt);
       }
 
-      if (!currentUserId || !users.some((u) => u.id === currentUserId)) {
-        currentUserId = users[0].id;
+      if (!currentUserId || !visibleUsers.some((u) => u.id === currentUserId)) {
+        currentUserId = visibleUsers[0].id;
         userSelect.value = String(currentUserId);
       }
 
@@ -96,9 +97,10 @@
 
     async function ensureUserSelected() {
       await refreshUsers();
-      if (!users.length) {
+      const hasVisibleUsers = users.some((u) => (u.name || "").trim().toLowerCase() !== "llm");
+      if (!hasVisibleUsers) {
         const created = await createUser("Usuario 1");
-        users = [created];
+        users = [...users, created];
         currentUserId = created.id;
         renderUsers();
       }
