@@ -31,10 +31,12 @@ def register_chat_routes(app) -> None:
         pregunta = body.get("pregunta", "")
         raw_conversation_id = body.get("conversation_id")
         raw_user_id = body.get("user_id")
+        # Normaliza ids: cualquier valor no entero se trata como ausente.
         conversation_id = raw_conversation_id if isinstance(raw_conversation_id, int) else None
         user_id = raw_user_id if isinstance(raw_user_id, int) else None
         try:
             salida = generar_respuesta(pregunta)
+            # Solo persistimos mensajes no vacíos para evitar ruido en historial.
             if (pregunta or "").strip():
                 conversation_id = save_message("user", pregunta.strip(), [], conversation_id, user_id=user_id)
             if (salida.get("respuesta") or "").strip():
@@ -61,6 +63,7 @@ def register_chat_routes(app) -> None:
         content = (body.get("content") or "").strip()
         raw_conversation_id = body.get("conversation_id")
         raw_user_id = body.get("user_id")
+        # En esta API exigimos tipos estrictos para mantener consistencia.
         conversation_id = raw_conversation_id if isinstance(raw_conversation_id, int) else None
         user_id = raw_user_id if isinstance(raw_user_id, int) else None
 
@@ -78,6 +81,7 @@ def register_chat_routes(app) -> None:
         )
         llm_enabled = is_conversation_llm_enabled(conversation_id)
         if not llm_enabled:
+            # Cuando LLM está apagado, el endpoint sigue siendo útil para guardar diálogo humano.
             return jsonify({
                 "ok": True,
                 "conversation_id": conversation_id,
@@ -86,6 +90,7 @@ def register_chat_routes(app) -> None:
             }), 201
 
         try:
+            # El autor de la respuesta automática siempre es el usuario reservado "LLM".
             llm_user = create_user("LLM")
             llm_user_id = llm_user.get("id") if isinstance(llm_user, dict) else None
             salida = generar_respuesta(content)
@@ -106,6 +111,7 @@ def register_chat_routes(app) -> None:
             }), 201
         except Exception as e:
             app.logger.exception("Fallo en respuesta LLM para /api/messages")
+            # Guardamos la incidencia como mensaje para que quede trazabilidad en la conversación.
             save_message(
                 "assistant",
                 f"No se pudo generar respuesta del LLM: {e}",
@@ -124,6 +130,7 @@ def register_chat_routes(app) -> None:
     def api_history():
         """Devuelve mensajes del historial para una conversación concreta."""
         raw_conversation_id = request.args.get("conversation_id", default=None, type=int)
+        # Si no llega id, devolvemos/creamos la conversación por defecto para no romper la UI.
         conversation_id = raw_conversation_id or get_or_create_default_conversation_id()
         return jsonify({
             "conversation_id": conversation_id,
@@ -201,6 +208,7 @@ def register_chat_routes(app) -> None:
             return jsonify({"ok": False, "error": "Conversación no encontrada"}), 404
 
         conversaciones = list_conversations(limit=1)
+        # Tras borrar, el frontend necesita un siguiente chat seleccionado para mantener continuidad.
         if conversaciones:
             next_conversation_id = conversaciones[0]["id"]
         else:

@@ -83,6 +83,7 @@ function renderConversations() {
     deleteBtn.className = "delete-conversation";
     deleteBtn.textContent = "Eliminar";
     deleteBtn.addEventListener("click", async (ev) => {
+      // Evita que el click en "Eliminar" también seleccione la conversación.
       ev.stopPropagation();
       await deleteConversation(c.id);
     });
@@ -109,6 +110,7 @@ async function fetchConversations() {
     if (!r.ok || !Array.isArray(data.conversations)) return [];
     return data.conversations;
   } catch (_) {
+    // Fallback silencioso para no romper la interfaz por un fallo temporal de red.
     return [];
   }
 }
@@ -199,6 +201,7 @@ async function syncCurrentConversation() {
   const last = messages[messages.length - 1];
   const nextLastId = last ? Number(last.id || 0) : 0;
   if (nextLastId !== lastRenderedMessageId) {
+    // Solo re-renderizamos cuando cambia el último mensaje para reducir parpadeos.
     renderChat(messages);
     await refreshConversations();
   }
@@ -208,6 +211,7 @@ async function syncCurrentConversation() {
 async function ensureConversationSelected() {
   await refreshConversations();
   if (!conversations.length) {
+    // Primera ejecución: garantiza un chat disponible antes de enviar mensajes.
     const created = await createConversation();
     conversations = [created];
   }
@@ -283,6 +287,7 @@ form.addEventListener("submit", async (e) => {
   if (!userManager.getCurrentUserId()) await userManager.ensureUserSelected();
 
   const currentUserId = userManager.getCurrentUserId();
+  // Limpia el input de inmediato para mejorar sensación de respuesta en UI.
   q.value = "";
   try {
     const r = await fetch("/api/messages", {
@@ -305,6 +310,7 @@ form.addEventListener("submit", async (e) => {
     }
 
     if (typeof data.conversation_id === "number") {
+      // El backend puede redirigir a otra conversación válida; lo respetamos.
       currentConversationId = data.conversation_id;
     }
     await syncCurrentConversation();
@@ -325,6 +331,7 @@ clearBtn.addEventListener("click", async () => {
     );
     if (r.ok) {
       chat.innerHTML = "";
+      // Mostramos confirmación como mensaje del sistema en el propio chat.
       addMsg("Asistente", "Chat limpiado.", []);
       await refreshConversations();
     }
@@ -350,6 +357,7 @@ if (toggleLlmBtn) {
     const nextEnabled = currentConversation.llm_enabled === false;
     try {
       const updated = await setConversationLlm(currentConversation.id, nextEnabled);
+      // Actualización optimista local sin refetch completo de conversaciones.
       conversations = conversations.map((c) => (c.id === updated.id ? { ...c, ...updated } : c));
       renderConversations();
       syncLlmButton();
@@ -368,5 +376,6 @@ if (toggleLlmBtn) {
 })();
 
 setInterval(() => {
+  // Polling simple para sincronizar cambios que puedan llegar desde otra pestaña/sesión.
   void syncCurrentConversation();
 }, 2000);

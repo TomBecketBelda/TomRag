@@ -38,12 +38,14 @@ def inicializar_modelos() -> None:
     """Carga modelos y base vectorial una sola vez."""
     global embedder, llm, coleccion, total_docs, _inicializado
     if _inicializado:
+        # Lazy-init real: evita recargar modelos pesados en cada request.
         return
 
     print("⏳ Cargando modelos (puede tardar unos segundos)...")
 
     embedder = SentenceTransformer("all-MiniLM-L6-v2")
     if not Path(MODEL_PATH).exists():
+        # Fallo explícito y guiado para acelerar la puesta en marcha.
         raise FileNotFoundError(
             "No se encontró el modelo GGUF 8B en:\n"
             f"  {MODEL_PATH}\n\n"
@@ -79,6 +81,7 @@ def buscar_contexto(pregunta: str) -> tuple[str, list[str]]:
     """Busca fragmentos relevantes y devuelve contexto + fuentes."""
     inicializar_modelos()
     if total_docs == 0:
+        # Sin base vectorial no hay contexto RAG disponible.
         return "", []
 
     embedding = embedder.encode([pregunta]).tolist()
@@ -126,6 +129,7 @@ def buscar_contexto_web(pregunta: str, max_resultados: int = WEB_MAX_RESULTADOS)
         with urlopen(req, timeout=WEB_TIMEOUT_S) as resp:
             data = json.loads(resp.read().decode("utf-8", errors="ignore"))
     except (HTTPError, URLError, TimeoutError, ValueError):
+        # Degrada sin romper: si falla una fuente, seguimos con las demás.
         data = {}
 
     abstract_text = (data.get("AbstractText") or "").strip()
@@ -244,6 +248,7 @@ def generar_respuesta(pregunta: str) -> dict:
             origen_contexto = "rag"
 
     if not contexto.strip() and ENABLE_WEB_FALLBACK:
+        # Solo acudimos a web cuando RAG no aporta contexto utilizable.
         contexto, fuentes = buscar_contexto_web(pregunta)
         if contexto.strip():
             origen_contexto = "web"
@@ -276,6 +281,7 @@ def generar_respuesta(pregunta: str) -> dict:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": pregunta},
         ]
+        # Se mantiene una temperatura baja para priorizar respuestas más estables.
         respuesta = llm.create_chat_completion(
             messages=mensajes,
             max_tokens=MAX_TOKENS,
@@ -290,6 +296,7 @@ def generar_respuesta(pregunta: str) -> dict:
     if ENABLE_WEB_FALLBACK and origen_contexto != "web" and _respuesta_sin_info(mensaje):
         contexto_web, fuentes_web = buscar_contexto_web(pregunta)
         if contexto_web.strip():
+            # Reintento controlado: evita devolver "no sé" cuando sí hay contexto online.
             mensaje = _resolver(contexto_web, "web")
             fuentes = fuentes_web
 

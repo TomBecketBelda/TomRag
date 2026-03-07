@@ -64,6 +64,7 @@ def init_history_db() -> None:
         )
         cols = conn.execute("PRAGMA table_info(chat_messages)").fetchall()
         col_names = {row["name"] for row in cols}
+        # Migración incremental: añade columnas nuevas sin destruir datos existentes.
         if "conversation_id" not in col_names:
             conn.execute("ALTER TABLE chat_messages ADD COLUMN conversation_id INTEGER")
         if "user_id" not in col_names:
@@ -119,6 +120,7 @@ def create_user(name: str) -> dict:
             )
             user_id = int(cur.lastrowid)
         except sqlite3.IntegrityError as exc:
+            # Hace la operación idempotente para el flujo que "asegura" usuario LLM.
             row = conn.execute(
                 "SELECT id, name, created_at FROM chat_users WHERE name = ?",
                 (final_name,),
@@ -164,12 +166,14 @@ def _ensure_default_conversation(conn: sqlite3.Connection) -> int:
         default_id = int(row["id"])
     else:
         now = _utc_now_iso()
+        # "Chat 1" actúa como ancla para no dejar el sistema sin conversación válida.
         cur = conn.execute(
             "INSERT INTO chat_conversations(title, llm_enabled, created_at, updated_at) VALUES (?, 1, ?, ?)",
             ("Chat 1", now, now),
         )
         default_id = int(cur.lastrowid)
 
+    # Repara datos históricos que aún no estaban asociados a conversación.
     conn.execute(
         "UPDATE chat_messages SET conversation_id = ? WHERE conversation_id IS NULL",
         (default_id,),
@@ -320,6 +324,7 @@ def save_message(
             (conversation_id,),
         ).fetchone()
         if not exists:
+            # Evita referencias huérfanas si el frontend envía un id desactualizado.
             conversation_id = _ensure_default_conversation(conn)
 
         valid_user_id = None
@@ -330,6 +335,7 @@ def save_message(
             ).fetchone()
             if user:
                 valid_user_id = int(user["id"])
+        # Si user_id no existe, se guarda como NULL para preservar el mensaje.
 
         conn.execute(
             """
@@ -368,6 +374,7 @@ def load_history(conversation_id: Optional[int] = None, limit: int = 200) -> lis
         ).fetchall()
 
     rows = list(reversed(rows))
+    # La consulta va DESC por eficiencia (últimos primero) y aquí la invertimos para render cronológico.
     salida = []
     for row in rows:
         try:

@@ -78,6 +78,7 @@ def _cargar_pdf_pdftotext(path: Path) -> str:
             return ""
         return _normalizar_texto(tmp_path.read_text(encoding="utf-8", errors="ignore"))
     finally:
+        # Limpieza defensiva: evita dejar temporales aunque falle la extracción.
         try:
             tmp_path.unlink(missing_ok=True)
         except Exception:
@@ -115,6 +116,7 @@ def cargar_pdf(path: Path) -> str:
         try:
             texto = fn(path)
             if len(texto) >= 80:
+                # Umbral mínimo para descartar extracciones vacías/ruidosas.
                 if nombre == "ocr":
                     print("   ℹ️  PDF leído por OCR (documento escaneado).")
                 return texto
@@ -129,6 +131,7 @@ def trocear(texto: str, chunk_size: int = CHUNK_SIZE) -> list[str]:
     """Divide el texto en fragmentos solapados para mejor contexto."""
     trozos = []
     for i in range(0, len(texto), chunk_size):
+        # Fragmentación simple por tamaño para equilibrar contexto y coste.
         trozo = texto[i : i + chunk_size].strip()
         if trozo:
             trozos.append(trozo)
@@ -148,6 +151,7 @@ else:
     for archivo in archivos:
         print(f"📄 Indexando: {archivo.name}")
         try:
+            # Selecciona extractor según extensión para soportar txt y pdf en el mismo flujo.
             texto = cargar_pdf(archivo) if archivo.suffix == ".pdf" else cargar_txt(archivo)
             fragmentos = trocear(texto)
             if not fragmentos:
@@ -161,6 +165,7 @@ else:
             try:
                 coleccion.delete(ids=ids)
             except Exception:
+                # Si no existían ids previos, continuamos con alta normal.
                 pass
 
             coleccion.add(documents=fragmentos, embeddings=embeddings, ids=ids)

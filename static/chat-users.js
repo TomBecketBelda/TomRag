@@ -34,6 +34,7 @@
       }
 
       if (!currentUserId || !visibleUsers.some((u) => u.id === currentUserId)) {
+        // Si el usuario activo ya no existe, hacemos fallback al primero disponible.
         currentUserId = visibleUsers[0].id;
         userSelect.value = String(currentUserId);
       }
@@ -106,6 +107,7 @@
       await refreshUsers();
       const hasVisibleUsers = users.some((u) => (u.name || "").trim().toLowerCase() !== "llm");
       if (!hasVisibleUsers) {
+        // Auto-bootstrap para permitir usar el chat sin configuración previa.
         const created = await createUser("Usuario 1");
         users = [...users, created];
         currentUserId = created.id;
@@ -128,6 +130,7 @@
       userSelect.addEventListener("change", () => {
         const value = Number(userSelect.value);
         if (Number.isInteger(value) && value > 0) {
+          // Solo admitimos ids positivos para evitar estados inválidos en memoria.
           currentUserId = value;
           renderUsers();
         }
