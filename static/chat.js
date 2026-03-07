@@ -4,13 +4,15 @@ const q = document.getElementById("q");
 const clearBtn = document.getElementById("clear");
 const newChatBtn = document.getElementById("new-chat");
 const historyList = document.getElementById("history-list");
+const userSelect = document.getElementById("user-select");
+const registerUserBtn = document.getElementById("register-user");
 
 let conversations = [];
 let currentConversationId = null;
 
-function addMsg(role, text, fuentes) {
+function addMsg(role, text, fuentes, isUser = false) {
   const div = document.createElement("div");
-  div.className = "msg " + (role === "Tu" ? "user" : "bot");
+  div.className = "msg " + (isUser ? "user" : "bot");
   div.textContent = role + ": " + text;
   chat.appendChild(div);
   if (fuentes && fuentes.length) {
@@ -25,8 +27,9 @@ function addMsg(role, text, fuentes) {
 function renderChat(messages) {
   chat.innerHTML = "";
   for (const m of messages) {
-    const role = m.role === "user" ? "Tu" : "Asistente";
-    addMsg(role, m.content || "", m.sources || []);
+    const isUser = m.role === "user";
+    const role = isUser ? (m.user_name || "Usuario") : "Asistente";
+    addMsg(role, m.content || "", m.sources || [], isUser);
   }
 }
 
@@ -191,18 +194,30 @@ async function deleteConversation(conversationId) {
   }
 }
 
+const userManager = window.createUserManager({
+  userSelect,
+  registerUserBtn,
+  onInfo: (text) => addMsg("Asistente", text, [])
+});
+userManager.bindEvents();
+
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const pregunta = q.value.trim();
   if (!pregunta) return;
   if (!currentConversationId) await ensureConversationSelected();
-  addMsg("Tu", pregunta);
+  if (!userManager.getCurrentUserId()) await userManager.ensureUserSelected();
+
+  const currentUserId = userManager.getCurrentUserId();
+  const userName = userManager.getCurrentUserName();
+
+  addMsg(userName, pregunta, [], true);
   q.value = "";
   try {
     const r = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pregunta, conversation_id: currentConversationId })
+      body: JSON.stringify({ pregunta, conversation_id: currentConversationId, user_id: currentUserId })
     });
 
     let data = {};
@@ -255,4 +270,7 @@ newChatBtn.addEventListener("click", async () => {
   }
 });
 
-void ensureConversationSelected();
+(async () => {
+  await userManager.ensureUserSelected();
+  await ensureConversationSelected();
+})();

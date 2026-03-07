@@ -28,6 +28,15 @@ def init_history_db() -> None:
     with db_conn() as conn:
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS chat_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS chat_conversations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL DEFAULT 'Nuevo chat',
@@ -44,7 +53,8 @@ def init_history_db() -> None:
                 content TEXT NOT NULL,
                 sources_json TEXT NOT NULL DEFAULT '[]',
                 created_at TEXT NOT NULL,
-                conversation_id INTEGER
+                conversation_id INTEGER,
+                user_id INTEGER
             )
             """
         )
@@ -52,6 +62,8 @@ def init_history_db() -> None:
         col_names = {row["name"] for row in cols}
         if "conversation_id" not in col_names:
             conn.execute("ALTER TABLE chat_messages ADD COLUMN conversation_id INTEGER")
+        if "user_id" not in col_names:
+            conn.execute("ALTER TABLE chat_messages ADD COLUMN user_id INTEGER")
 
         conn.execute(
             """
@@ -59,7 +71,55 @@ def init_history_db() -> None:
             ON chat_messages(conversation_id, id)
             """
         )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_chat_messages_user_id
+            ON chat_messages(user_id)
+            """
+        )
         _ensure_default_conversation(conn)
+
+
+def list_users(limit: int = 200) -> list[dict]:
+    with db_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, name, created_at
+            FROM chat_users
+            ORDER BY name COLLATE NOCASE ASC, id ASC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def create_user(name: str) -> dict:
+    final_name = (name or "").strip()
+    if not final_name:
+        raise ValueError("El nombre de usuario es obligatorio")
+    now = _utc_now_iso()
+    with db_conn() as conn:
+        try:
+            cur = conn.execute(
+                "INSERT INTO chat_users(name, created_at) VALUES (?, ?)",
+                (final_name, now),
+            )
+            user_id = int(cur.lastrowid)
+        except sqlite3.IntegrityError as exc:
+            row = conn.execute(
+                "SELECT id, name, created_at FROM chat_users WHERE name = ?",
+                (final_name,),
+            ).fetchone()
+            if row:
+                return dict(row)
+            raise ValueError("Ya existe un usuario con ese nombre") from exc
+
+        row = conn.execute(
+            "SELECT id, name, created_at FROM chat_users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+    return dict(row) if row else {"id": user_id, "name": final_name, "created_at": now}
 
 
 def _utc_now_iso() -> str:
@@ -160,6 +220,7 @@ def save_message(
     content: str,
     sources: Optional[List[str]] = None,
     conversation_id: Optional[int] = None,
+    user_id: Optional[int] = None,
 ) -> int:
     now = _utc_now_iso()
     payload = json.dumps(sources or [], ensure_ascii=False)
@@ -172,12 +233,22 @@ def save_message(
         ).fetchone()
         if not exists:
             conversation_id = _ensure_default_conversation(conn)
+
+        valid_user_id = None
+        if user_id is not None:
+            user = conn.execute(
+                "SELECT id FROM chat_users WHERE id = ?",
+                (user_id,),
+            ).fetchone()
+            if user:
+                valid_user_id = int(user["id"])
+
         conn.execute(
             """
-            INSERT INTO chat_messages(role, content, sources_json, created_at, conversation_id)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO chat_messages(role, content, sources_json, created_at, conversation_id, user_id)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (role, content, payload, now, conversation_id),
+            (role, content, payload, now, conversation_id, valid_user_id),
         )
         _touch_conversation(conn, int(conversation_id))
     return int(conversation_id)
@@ -189,10 +260,19 @@ def load_history(conversation_id: Optional[int] = None, limit: int = 200) -> lis
             conversation_id = _ensure_default_conversation(conn)
         rows = conn.execute(
             """
-            SELECT id, role, content, sources_json, created_at, conversation_id
-            FROM chat_messages
-            WHERE conversation_id = ?
-            ORDER BY id DESC
+            SELECT
+                m.id,
+                m.role,
+                m.content,
+                m.sources_json,
+                m.created_at,
+                m.conversation_id,
+                m.user_id,
+                u.name AS user_name
+            FROM chat_messages m
+            LEFT JOIN chat_users u ON u.id = m.user_id
+            WHERE m.conversation_id = ?
+            ORDER BY m.id DESC
             LIMIT ?
             """,
             (conversation_id, limit),
@@ -214,6 +294,8 @@ def load_history(conversation_id: Optional[int] = None, limit: int = 200) -> lis
                 "sources": fuentes if isinstance(fuentes, list) else [],
                 "created_at": row["created_at"],
                 "conversation_id": row["conversation_id"],
+                "user_id": row["user_id"],
+                "user_name": row["user_name"],
             }
         )
     return salida

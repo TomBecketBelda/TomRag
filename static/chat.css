@@ -193,6 +193,36 @@ h1 {
   font-size: 0.95rem;
 }
 
+.user-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  color: #5e0c12;
+  font-weight: 700;
+}
+
+.user-bar label {
+  font-size: 0.92rem;
+}
+
+.user-bar select {
+  min-width: 180px;
+  border-radius: 999px;
+  border: 1px solid #d8a8ad;
+  background: #fffdfd;
+  color: #391014;
+  padding: 10px 14px;
+  font-weight: 600;
+}
+
+.user-bar select:focus {
+  outline: none;
+  border-color: var(--red-500);
+  box-shadow: 0 0 0 4px rgba(201, 61, 78, 0.18);
+}
+
 #chat {
   border: 1px solid #e3b8bc;
   border-radius: 20px;

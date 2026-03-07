@@ -4,9 +4,11 @@ from flask import Flask, jsonify, render_template, request
 
 from .chat_history_db import (
     clear_history,
+    create_user,
     create_conversation,
     delete_conversation,
     get_or_create_default_conversation_id,
+    list_users,
     list_conversations,
     load_history,
     save_message,
@@ -31,11 +33,13 @@ def api_chat():
     body = request.get_json(silent=True) or {}
     pregunta = body.get("pregunta", "")
     raw_conversation_id = body.get("conversation_id")
+    raw_user_id = body.get("user_id")
     conversation_id = raw_conversation_id if isinstance(raw_conversation_id, int) else None
+    user_id = raw_user_id if isinstance(raw_user_id, int) else None
     try:
         salida = generar_respuesta(pregunta)
         if (pregunta or "").strip():
-            conversation_id = save_message("user", pregunta.strip(), [], conversation_id)
+            conversation_id = save_message("user", pregunta.strip(), [], conversation_id, user_id=user_id)
         if (salida.get("respuesta") or "").strip():
             conversation_id = save_message(
                 "assistant",
@@ -82,6 +86,24 @@ def api_conversations_create():
     title = body.get("title")
     conversation = create_conversation(title if isinstance(title, str) else None)
     return jsonify({"conversation": conversation}), 201
+
+
+@app.route("/api/users", methods=["GET"])
+def api_users():
+    return jsonify({"users": list_users()})
+
+
+@app.route("/api/users", methods=["POST"])
+def api_users_create():
+    body = request.get_json(silent=True) or {}
+    name = body.get("name")
+    if not isinstance(name, str):
+        return jsonify({"error": "El nombre de usuario es obligatorio"}), 400
+    try:
+        user = create_user(name)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify({"user": user}), 201
 
 
 @app.route("/api/conversations/<int:conversation_id>", methods=["DELETE"])

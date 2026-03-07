@@ -32,6 +32,11 @@
           <p>Asistente documental con memoria por conversaciones.</p>
         </div>
       </header>
+      <div class="user-bar">
+        <label for="user-select">Usuario:</label>
+        <select id="user-select" aria-label="Seleccionar usuario"></select>
+        <button type="button" id="register-user">Registrar usuario</button>
+      </div>
       <div id="chat"></div>
       <form id="f">
         <input id="q" placeholder="Escribe tu pregunta..." autocomplete="off" />
@@ -41,6 +46,7 @@
     </main>
   </div>
 
+  <script src="{{ url_for('static', filename='chat-users.js') }}"></script>
   <script src="{{ url_for('static', filename='chat.js') }}"></script>
 </body>
 </html>
