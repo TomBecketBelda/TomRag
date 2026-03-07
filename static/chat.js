@@ -13,6 +13,7 @@ let conversations = [];
 let currentConversationId = null;
 let lastRenderedMessageId = null;
 
+// Añade un mensaje al panel de chat y, si existen, muestra sus fuentes.
 function addMsg(role, text, fuentes, isUser = false) {
   const div = document.createElement("div");
   div.className = "msg " + (isUser ? "user" : "bot");
@@ -27,6 +28,7 @@ function addMsg(role, text, fuentes, isUser = false) {
   chat.scrollTop = chat.scrollHeight;
 }
 
+// Renderiza todo el historial recibido en el panel de chat.
 function renderChat(messages) {
   chat.innerHTML = "";
   for (const m of messages) {
@@ -38,6 +40,7 @@ function renderChat(messages) {
   lastRenderedMessageId = last ? Number(last.id || 0) : 0;
 }
 
+// Genera una vista previa corta del último mensaje de una conversación.
 function previewText(conversation) {
   const last = String(conversation.last_message || "").replace(/\s+/g, " ").trim();
   if (last) {
@@ -47,6 +50,7 @@ function previewText(conversation) {
   return "Sin mensajes";
 }
 
+// Dibuja la lista de conversaciones y sus acciones en el lateral.
 function renderConversations() {
   historyList.innerHTML = "";
   if (!conversations.length) {
@@ -97,6 +101,7 @@ function renderConversations() {
   }
 }
 
+// Obtiene todas las conversaciones desde la API.
 async function fetchConversations() {
   try {
     const r = await fetch("/api/conversations");
@@ -108,6 +113,7 @@ async function fetchConversations() {
   }
 }
 
+// Crea una nueva conversación vacía en el backend.
 async function createConversation() {
   const r = await fetch("/api/conversations", {
     method: "POST",
@@ -121,6 +127,7 @@ async function createConversation() {
   return data.conversation;
 }
 
+// Elimina una conversación por id mediante la API.
 async function deleteConversationById(conversationId) {
   const r = await fetch("/api/conversations/" + encodeURIComponent(conversationId), {
     method: "DELETE"
@@ -137,6 +144,7 @@ async function deleteConversationById(conversationId) {
   return data;
 }
 
+// Cambia el estado de LLM (on/off) para una conversación.
 async function setConversationLlm(conversationId, enabled) {
   const r = await fetch("/api/conversations/" + encodeURIComponent(conversationId) + "/llm", {
     method: "PATCH",
@@ -155,6 +163,7 @@ async function setConversationLlm(conversationId, enabled) {
   return data.conversation;
 }
 
+// Recupera los mensajes de una conversación concreta.
 async function fetchHistory(conversationId) {
   if (typeof conversationId !== "number") return [];
   try {
@@ -167,12 +176,14 @@ async function fetchHistory(conversationId) {
   }
 }
 
+// Refresca el estado local de conversaciones y lo vuelve a pintar.
 async function refreshConversations() {
   conversations = await fetchConversations();
   renderConversations();
   syncLlmButton();
 }
 
+// Selecciona una conversación y carga su historial en pantalla.
 async function selectConversation(conversationId) {
   currentConversationId = conversationId;
   renderConversations();
@@ -181,6 +192,7 @@ async function selectConversation(conversationId) {
   renderChat(messages);
 }
 
+// Sincroniza el chat actual solo si detecta mensajes nuevos.
 async function syncCurrentConversation() {
   if (!currentConversationId) return;
   const messages = await fetchHistory(currentConversationId);
@@ -192,6 +204,7 @@ async function syncCurrentConversation() {
   }
 }
 
+// Garantiza que exista y quede seleccionada una conversación activa.
 async function ensureConversationSelected() {
   await refreshConversations();
   if (!conversations.length) {
@@ -206,10 +219,12 @@ async function ensureConversationSelected() {
   await selectConversation(currentConversationId);
 }
 
+// Devuelve la conversación actualmente seleccionada en memoria.
 function getCurrentConversation() {
   return conversations.find((c) => c.id === currentConversationId) || null;
 }
 
+// Sincroniza el texto/estado del botón para activar o desactivar LLM.
 function syncLlmButton() {
   if (!toggleLlmBtn) return;
   const currentConversation = getCurrentConversation();
@@ -225,6 +240,7 @@ function syncLlmButton() {
   toggleLlmBtn.classList.toggle("is-off", !enabled);
 }
 
+// Gestiona el flujo de borrado con confirmación y recarga de UI.
 async function deleteConversation(conversationId) {
   const convo = conversations.find((c) => c.id === conversationId);
   const nombre = convo?.title || ("Chat " + conversationId);

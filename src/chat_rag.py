@@ -101,6 +101,7 @@ def buscar_contexto_web(pregunta: str, max_resultados: int = WEB_MAX_RESULTADOS)
     fuentes: list[str] = []
 
     def add_fragment(texto: str, fuente: str = "") -> None:
+        """Añade un fragmento/fuente evitando duplicados y valores vacíos."""
         t = (texto or "").strip()
         if not t:
             return
@@ -213,6 +214,7 @@ def buscar_contexto_web(pregunta: str, max_resultados: int = WEB_MAX_RESULTADOS)
 
 
 def _respuesta_sin_info(texto: str) -> bool:
+    """Detecta si el modelo respondió explícitamente que no tiene información."""
     t = (texto or "").lower()
     patrones = [
         "no está en el contexto",
@@ -247,6 +249,7 @@ def generar_respuesta(pregunta: str) -> dict:
             origen_contexto = "web"
 
     def _resolver(contexto_local: str, origen_local: str) -> str:
+        """Construye el prompt según el origen del contexto y consulta el LLM."""
         if contexto_local.strip():
             if origen_local == "web":
                 instrucciones_fuente = (

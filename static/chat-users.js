@@ -1,4 +1,5 @@
 (function () {
+  // Crea un gestor de usuarios para cargar, seleccionar, crear y borrar usuarios.
   function createUserManager(options) {
     const userSelect = options.userSelect;
     const registerUserBtn = options.registerUserBtn;
@@ -8,6 +9,7 @@
     let users = [];
     let currentUserId = null;
 
+    // Pinta el selector de usuario y su estado según la lista disponible.
     function renderUsers() {
       const visibleUsers = users.filter((u) => (u.name || "").trim().toLowerCase() !== "llm");
       userSelect.innerHTML = "";
@@ -40,6 +42,7 @@
       if (deleteUserBtn) deleteUserBtn.disabled = !currentUserId || currentName.toLowerCase() === "llm";
     }
 
+    // Obtiene usuarios desde la API.
     async function fetchUsers() {
       try {
         const r = await fetch("/api/users");
@@ -51,6 +54,7 @@
       }
     }
 
+    // Crea un usuario nuevo en el backend.
     async function createUser(name) {
       const r = await fetch("/api/users", {
         method: "POST",
@@ -71,6 +75,7 @@
       return data.user;
     }
 
+    // Borra un usuario por id en el backend.
     async function deleteUser(userId) {
       const r = await fetch("/api/users/" + encodeURIComponent(userId), {
         method: "DELETE"
@@ -89,12 +94,14 @@
       return data;
     }
 
+    // Actualiza la lista de usuarios en memoria y en pantalla.
     async function refreshUsers() {
       users = await fetchUsers();
       renderUsers();
       return users;
     }
 
+    // Garantiza que exista un usuario seleccionable para enviar mensajes.
     async function ensureUserSelected() {
       await refreshUsers();
       const hasVisibleUsers = users.some((u) => (u.name || "").trim().toLowerCase() !== "llm");
@@ -106,14 +113,17 @@
       }
     }
 
+    // Devuelve el id del usuario actualmente seleccionado.
     function getCurrentUserId() {
       return currentUserId;
     }
 
+    // Devuelve el nombre del usuario seleccionado o un valor por defecto.
     function getCurrentUserName() {
       return users.find((u) => u.id === currentUserId)?.name || "Usuario";
     }
 
+    // Enlaza eventos de UI para selección, alta y borrado de usuarios.
     function bindEvents() {
       userSelect.addEventListener("change", () => {
         const value = Number(userSelect.value);

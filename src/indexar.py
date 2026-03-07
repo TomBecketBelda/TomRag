@@ -26,13 +26,16 @@ coleccion = client.get_or_create_collection("documentos")
 
 # ── Funciones de carga ─────────────────────────────────────────────────────────
 def cargar_txt(path: Path) -> str:
+    """Lee un .txt completo ignorando errores de codificación."""
     return path.read_text(encoding="utf-8", errors="ignore")
 
 def _normalizar_texto(texto: str) -> str:
+    """Limpia espacios de fin de línea y recorta huecos en extremos."""
     return "\n".join(line.rstrip() for line in texto.splitlines()).strip()
 
 
 def _cargar_pdf_pypdf(path: Path) -> str:
+    """Extrae texto con `pypdf` comparando modo normal vs layout."""
     from pypdf import PdfReader
 
     reader = PdfReader(str(path))
@@ -47,6 +50,7 @@ def _cargar_pdf_pypdf(path: Path) -> str:
 
 
 def _cargar_pdf_pymupdf(path: Path) -> str:
+    """Extrae texto de PDF usando PyMuPDF."""
     import fitz  # PyMuPDF
 
     texto = []
@@ -57,6 +61,7 @@ def _cargar_pdf_pymupdf(path: Path) -> str:
 
 
 def _cargar_pdf_pdftotext(path: Path) -> str:
+    """Intenta extraer texto con binario `pdftotext` si está instalado."""
     if shutil.which("pdftotext") is None:
         return ""
 

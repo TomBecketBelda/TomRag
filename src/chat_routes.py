@@ -18,12 +18,15 @@ from .chat_rag import generar_respuesta
 
 
 def register_chat_routes(app) -> None:
+    """Registra todas las rutas web y API del chat en la app Flask."""
     @app.route("/")
     def index():
+        """Renderiza la interfaz principal del chat."""
         return render_template("chat.html")
 
     @app.route("/api/chat", methods=["POST"])
     def api_chat():
+        """Endpoint legacy: procesa pregunta y guarda mensaje + respuesta del asistente."""
         body = request.get_json(silent=True) or {}
         pregunta = body.get("pregunta", "")
         raw_conversation_id = body.get("conversation_id")
@@ -53,6 +56,7 @@ def register_chat_routes(app) -> None:
 
     @app.route("/api/messages", methods=["POST"])
     def api_messages_create():
+        """Crea un mensaje de usuario y opcionalmente genera respuesta del LLM."""
         body = request.get_json(silent=True) or {}
         content = (body.get("content") or "").strip()
         raw_conversation_id = body.get("conversation_id")
@@ -118,6 +122,7 @@ def register_chat_routes(app) -> None:
 
     @app.route("/api/history", methods=["GET"])
     def api_history():
+        """Devuelve mensajes del historial para una conversación concreta."""
         raw_conversation_id = request.args.get("conversation_id", default=None, type=int)
         conversation_id = raw_conversation_id or get_or_create_default_conversation_id()
         return jsonify({
@@ -127,16 +132,19 @@ def register_chat_routes(app) -> None:
 
     @app.route("/api/history", methods=["DELETE"])
     def api_history_delete():
+        """Elimina el historial de una conversación o de todas si no se indica id."""
         raw_conversation_id = request.args.get("conversation_id", default=None, type=int)
         clear_history(conversation_id=raw_conversation_id)
         return jsonify({"ok": True, "conversation_id": raw_conversation_id})
 
     @app.route("/api/conversations", methods=["GET"])
     def api_conversations():
+        """Lista las conversaciones disponibles para el panel lateral."""
         return jsonify({"conversations": list_conversations()})
 
     @app.route("/api/conversations", methods=["POST"])
     def api_conversations_create():
+        """Crea una nueva conversación con título opcional."""
         body = request.get_json(silent=True) or {}
         title = body.get("title")
         conversation = create_conversation(title if isinstance(title, str) else None)
@@ -144,6 +152,7 @@ def register_chat_routes(app) -> None:
 
     @app.route("/api/conversations/<int:conversation_id>/llm", methods=["PATCH"])
     def api_conversations_llm_toggle(conversation_id: int):
+        """Activa o desactiva el uso del LLM en una conversación."""
         body = request.get_json(silent=True) or {}
         enabled = body.get("enabled")
         if not isinstance(enabled, bool):
@@ -156,10 +165,12 @@ def register_chat_routes(app) -> None:
 
     @app.route("/api/users", methods=["GET"])
     def api_users():
+        """Lista usuarios disponibles para asociar mensajes."""
         return jsonify({"users": list_users()})
 
     @app.route("/api/users", methods=["POST"])
     def api_users_create():
+        """Crea un usuario nuevo validando que el nombre exista."""
         body = request.get_json(silent=True) or {}
         name = body.get("name")
         if not isinstance(name, str):
@@ -172,6 +183,7 @@ def register_chat_routes(app) -> None:
 
     @app.route("/api/users/<int:user_id>", methods=["DELETE"])
     def api_users_delete(user_id: int):
+        """Elimina un usuario por id si es borrable."""
         try:
             deleted = delete_user(user_id)
         except ValueError as exc:
@@ -183,6 +195,7 @@ def register_chat_routes(app) -> None:
 
     @app.route("/api/conversations/<int:conversation_id>", methods=["DELETE"])
     def api_conversations_delete(conversation_id: int):
+        """Elimina una conversación y devuelve cuál debe quedar seleccionada."""
         deleted = delete_conversation(conversation_id)
         if not deleted:
             return jsonify({"ok": False, "error": "Conversación no encontrada"}), 404

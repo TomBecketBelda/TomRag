@@ -11,12 +11,14 @@ LEGACY_DB_FILE = ROOT_DIR / "chat_history.db"
 
 
 def db_conn() -> sqlite3.Connection:
+    """Abre una conexión SQLite configurada para devolver filas tipo diccionario."""
     conn = sqlite3.connect(str(DB_FILE))
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def ensure_db_path() -> None:
+    """Crea la carpeta de datos y migra la base legacy si todavía existe."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     # Migra la DB antigua si todavía existe en la raíz del proyecto.
     if LEGACY_DB_FILE.exists() and not DB_FILE.exists():
@@ -24,6 +26,7 @@ def ensure_db_path() -> None:
 
 
 def init_history_db() -> None:
+    """Inicializa tablas/índices y garantiza una conversación por defecto."""
     ensure_db_path()
     with db_conn() as conn:
         conn.execute(
@@ -88,6 +91,7 @@ def init_history_db() -> None:
 
 
 def list_users(limit: int = 200) -> list[dict]:
+    """Lista usuarios ordenados alfabéticamente con un límite configurable."""
     with db_conn() as conn:
         rows = conn.execute(
             """
@@ -102,6 +106,7 @@ def list_users(limit: int = 200) -> list[dict]:
 
 
 def create_user(name: str) -> dict:
+    """Crea un usuario y, si ya existe por nombre, devuelve el registro existente."""
     final_name = (name or "").strip()
     if not final_name:
         raise ValueError("El nombre de usuario es obligatorio")
@@ -130,6 +135,7 @@ def create_user(name: str) -> dict:
 
 
 def delete_user(user_id: int) -> bool:
+    """Borra un usuario salvo el usuario reservado LLM y desacopla sus mensajes."""
     with db_conn() as conn:
         row = conn.execute(
             "SELECT id, name FROM chat_users WHERE id = ?",
@@ -147,10 +153,12 @@ def delete_user(user_id: int) -> bool:
 
 
 def _utc_now_iso() -> str:
+    """Devuelve la fecha/hora actual en UTC en formato ISO 8601."""
     return datetime.now(timezone.utc).isoformat()
 
 
 def _ensure_default_conversation(conn: sqlite3.Connection) -> int:
+    """Obtiene o crea la conversación inicial y reasigna mensajes sin conversación."""
     row = conn.execute("SELECT id FROM chat_conversations ORDER BY id ASC LIMIT 1").fetchone()
     if row:
         default_id = int(row["id"])
@@ -170,6 +178,7 @@ def _ensure_default_conversation(conn: sqlite3.Connection) -> int:
 
 
 def create_conversation(title: Optional[str] = None) -> dict:
+    """Crea una conversación nueva con título opcional y LLM activado."""
     now = _utc_now_iso()
     final_title = (title or "").strip() or "Nuevo chat"
     with db_conn() as conn:
@@ -194,6 +203,7 @@ def create_conversation(title: Optional[str] = None) -> dict:
 
 
 def list_conversations(limit: int = 100) -> list[dict]:
+    """Lista conversaciones con metadatos útiles para el historial del chat."""
     with db_conn() as conn:
         rows = conn.execute(
             """
@@ -223,6 +233,7 @@ def list_conversations(limit: int = 100) -> list[dict]:
 
 
 def delete_conversation(conversation_id: int) -> bool:
+    """Elimina una conversación y todos sus mensajes asociados."""
     with db_conn() as conn:
         row = conn.execute(
             "SELECT id FROM chat_conversations WHERE id = ?",
@@ -237,11 +248,13 @@ def delete_conversation(conversation_id: int) -> bool:
 
 
 def get_or_create_default_conversation_id() -> int:
+    """Devuelve el id de la conversación por defecto, creándola si falta."""
     with db_conn() as conn:
         return _ensure_default_conversation(conn)
 
 
 def is_conversation_llm_enabled(conversation_id: int) -> bool:
+    """Indica si el LLM está habilitado en la conversación indicada."""
     with db_conn() as conn:
         row = conn.execute(
             "SELECT llm_enabled FROM chat_conversations WHERE id = ?",
@@ -253,6 +266,7 @@ def is_conversation_llm_enabled(conversation_id: int) -> bool:
 
 
 def set_conversation_llm_enabled(conversation_id: int, enabled: bool) -> Optional[dict]:
+    """Activa/desactiva el LLM para una conversación y devuelve su estado actualizado."""
     now = _utc_now_iso()
     with db_conn() as conn:
         row = conn.execute(
@@ -274,12 +288,14 @@ def set_conversation_llm_enabled(conversation_id: int, enabled: bool) -> Optiona
 
 
 def _parse_conversation_row(row: sqlite3.Row) -> dict:
+    """Convierte una fila SQLite a dict normalizando `llm_enabled` a booleano."""
     conversation = dict(row)
     conversation["llm_enabled"] = bool(conversation.get("llm_enabled", 1))
     return conversation
 
 
 def _touch_conversation(conn: sqlite3.Connection, conversation_id: int) -> None:
+    """Actualiza el timestamp de modificación de una conversación."""
     conn.execute(
         "UPDATE chat_conversations SET updated_at = ? WHERE id = ?",
         (_utc_now_iso(), conversation_id),
@@ -293,6 +309,7 @@ def save_message(
     conversation_id: Optional[int] = None,
     user_id: Optional[int] = None,
 ) -> int:
+    """Guarda un mensaje en la conversación indicada y devuelve el id de conversación."""
     now = _utc_now_iso()
     payload = json.dumps(sources or [], ensure_ascii=False)
     with db_conn() as conn:
@@ -326,6 +343,7 @@ def save_message(
 
 
 def load_history(conversation_id: Optional[int] = None, limit: int = 200) -> list[dict]:
+    """Carga el historial de una conversación en orden cronológico ascendente."""
     with db_conn() as conn:
         if conversation_id is None:
             conversation_id = _ensure_default_conversation(conn)
@@ -373,6 +391,7 @@ def load_history(conversation_id: Optional[int] = None, limit: int = 200) -> lis
 
 
 def clear_history(conversation_id: Optional[int] = None) -> None:
+    """Borra mensajes de una conversación concreta o de todas si no se indica id."""
     with db_conn() as conn:
         if conversation_id is None:
             conn.execute("DELETE FROM chat_messages")
