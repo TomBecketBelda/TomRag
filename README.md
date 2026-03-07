@@ -3,6 +3,8 @@
 TomRag is a local RAG chat assistant with:
 - a Flask web UI,
 - a SQLite chat memory database with multiple conversations,
+- user attribution per message,
+- per-conversation LLM enable/disable toggle,
 - a local vector database (Chroma),
 - a local Llama GGUF model for generation,
 - optional internet fallback when local RAG context is missing.
@@ -26,7 +28,8 @@ It is useful when you want a private/local assistant that:
 3. In chat, the app retrieves relevant chunks (RAG).
 4. The Llama model generates an answer using that context.
 5. If no useful RAG context is found, internet fallback can fetch web context.
-6. Messages are saved to `data/chat_history.db` by conversation.
+6. Messages are saved to `data/chat_history.db` by conversation and user.
+7. If LLM is disabled for a conversation, user messages are still saved but no new LLM response is generated.
 
 ## Project Structure
 
@@ -38,6 +41,7 @@ It is useful when you want a private/local assistant that:
 - `templates/chat.html`: main UI template.
 - `static/chat.css`: frontend style.
 - `static/chat.js`: frontend chat logic.
+- `static/chat-users.js`: frontend user management logic.
 - `documentos/`: source files to index.
 - `vectordb/`: Chroma persistent vector store.
 - `data/chat_history.db`: SQLite chat history and conversations.
@@ -106,12 +110,17 @@ By default, Flask runs on:
 
 ## API Summary
 
-- `POST /api/chat`: ask a question and get answer + sources.
+- `POST /api/messages`: save user message and (if enabled) generate/save LLM response.
 - `GET /api/history?conversation_id=<id>`: get messages for one chat.
 - `DELETE /api/history?conversation_id=<id>`: clear messages in one chat.
-- `GET /api/conversations`: list conversations.
+- `GET /api/conversations`: list conversations (includes `llm_enabled`).
 - `POST /api/conversations`: create a conversation.
+- `PATCH /api/conversations/<id>/llm`: enable or disable LLM for one conversation.
 - `DELETE /api/conversations/<id>`: delete one conversation (including messages).
+- `GET /api/users`: list users.
+- `POST /api/users`: create user.
+- `DELETE /api/users/<id>`: delete user (except protected `LLM` user).
+- `POST /api/chat`: legacy endpoint to ask and receive answer + sources.
 
 ## Internet Fallback (When RAG Has No Context)
 
@@ -129,10 +138,15 @@ export WEB_TIMEOUT_S=8
 
 The app stores:
 - chat threads (`chat_conversations` table),
+- LLM status per thread (`chat_conversations.llm_enabled`),
 - chat messages (`chat_messages` table),
-- per-message role/content/timestamp/sources.
+- chat users (`chat_users` table),
+- per-message role/content/timestamp/sources/user.
 
 This allows:
 - multiple independent chat conversations,
 - switching chats from the sidebar,
-- deleting specific conversations from both UI and database.
+- deleting specific conversations from both UI and database,
+- assigning messages to selected users,
+- keeping LLM-generated history visible even when LLM is currently disabled,
+- hiding the `LLM` system user from the user dropdown while preserving its authored messages.
