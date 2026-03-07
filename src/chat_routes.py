@@ -7,10 +7,12 @@ from .chat_history_db import (
     delete_user,
     delete_conversation,
     get_or_create_default_conversation_id,
+    is_conversation_llm_enabled,
     list_conversations,
     list_users,
     load_history,
     save_message,
+    set_conversation_llm_enabled,
 )
 from .chat_rag import generar_respuesta
 
@@ -70,6 +72,15 @@ def register_chat_routes(app) -> None:
             conversation_id=conversation_id,
             user_id=user_id,
         )
+        llm_enabled = is_conversation_llm_enabled(conversation_id)
+        if not llm_enabled:
+            return jsonify({
+                "ok": True,
+                "conversation_id": conversation_id,
+                "llm_responded": False,
+                "llm_enabled": False,
+            }), 201
+
         try:
             llm_user = create_user("LLM")
             llm_user_id = llm_user.get("id") if isinstance(llm_user, dict) else None
@@ -87,6 +98,7 @@ def register_chat_routes(app) -> None:
                 "ok": True,
                 "conversation_id": conversation_id,
                 "llm_responded": bool(respuesta),
+                "llm_enabled": True,
             }), 201
         except Exception as e:
             app.logger.exception("Fallo en respuesta LLM para /api/messages")
@@ -100,6 +112,7 @@ def register_chat_routes(app) -> None:
                 "ok": True,
                 "conversation_id": conversation_id,
                 "llm_responded": False,
+                "llm_enabled": True,
                 "warning": str(e),
             }), 201
 
@@ -128,6 +141,18 @@ def register_chat_routes(app) -> None:
         title = body.get("title")
         conversation = create_conversation(title if isinstance(title, str) else None)
         return jsonify({"conversation": conversation}), 201
+
+    @app.route("/api/conversations/<int:conversation_id>/llm", methods=["PATCH"])
+    def api_conversations_llm_toggle(conversation_id: int):
+        body = request.get_json(silent=True) or {}
+        enabled = body.get("enabled")
+        if not isinstance(enabled, bool):
+            return jsonify({"ok": False, "error": "El campo 'enabled' debe ser booleano"}), 400
+
+        conversation = set_conversation_llm_enabled(conversation_id, enabled)
+        if not conversation:
+            return jsonify({"ok": False, "error": "Conversación no encontrada"}), 404
+        return jsonify({"ok": True, "conversation": conversation})
 
     @app.route("/api/users", methods=["GET"])
     def api_users():

@@ -312,6 +312,10 @@ button:active {
   background: linear-gradient(180deg, #b72a3a, #8f1e2d);
 }
 
+#toggle-llm.is-off {
+  background: linear-gradient(180deg, #4f5e67, #364047);
+}
+
 @media (max-width: 980px) {
   .layout {
     grid-template-columns: 1fr;

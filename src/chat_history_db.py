@@ -40,6 +40,7 @@ def init_history_db() -> None:
             CREATE TABLE IF NOT EXISTS chat_conversations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL DEFAULT 'Nuevo chat',
+                llm_enabled INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )
@@ -64,6 +65,12 @@ def init_history_db() -> None:
             conn.execute("ALTER TABLE chat_messages ADD COLUMN conversation_id INTEGER")
         if "user_id" not in col_names:
             conn.execute("ALTER TABLE chat_messages ADD COLUMN user_id INTEGER")
+        conversation_cols = conn.execute("PRAGMA table_info(chat_conversations)").fetchall()
+        conversation_col_names = {row["name"] for row in conversation_cols}
+        if "llm_enabled" not in conversation_col_names:
+            conn.execute(
+                "ALTER TABLE chat_conversations ADD COLUMN llm_enabled INTEGER NOT NULL DEFAULT 1"
+            )
 
         conn.execute(
             """
@@ -150,7 +157,7 @@ def _ensure_default_conversation(conn: sqlite3.Connection) -> int:
     else:
         now = _utc_now_iso()
         cur = conn.execute(
-            "INSERT INTO chat_conversations(title, created_at, updated_at) VALUES (?, ?, ?)",
+            "INSERT INTO chat_conversations(title, llm_enabled, created_at, updated_at) VALUES (?, 1, ?, ?)",
             ("Chat 1", now, now),
         )
         default_id = int(cur.lastrowid)
@@ -167,15 +174,23 @@ def create_conversation(title: Optional[str] = None) -> dict:
     final_title = (title or "").strip() or "Nuevo chat"
     with db_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO chat_conversations(title, created_at, updated_at) VALUES (?, ?, ?)",
+            "INSERT INTO chat_conversations(title, llm_enabled, created_at, updated_at) VALUES (?, 1, ?, ?)",
             (final_title, now, now),
         )
         conversation_id = int(cur.lastrowid)
         row = conn.execute(
-            "SELECT id, title, created_at, updated_at FROM chat_conversations WHERE id = ?",
+            "SELECT id, title, llm_enabled, created_at, updated_at FROM chat_conversations WHERE id = ?",
             (conversation_id,),
         ).fetchone()
-    return dict(row) if row else {"id": conversation_id, "title": final_title, "created_at": now, "updated_at": now}
+    if row:
+        return _parse_conversation_row(row)
+    return {
+        "id": conversation_id,
+        "title": final_title,
+        "llm_enabled": True,
+        "created_at": now,
+        "updated_at": now,
+    }
 
 
 def list_conversations(limit: int = 100) -> list[dict]:
@@ -185,6 +200,7 @@ def list_conversations(limit: int = 100) -> list[dict]:
             SELECT
                 c.id,
                 c.title,
+                c.llm_enabled,
                 c.created_at,
                 c.updated_at,
                 COUNT(m.id) AS message_count,
@@ -197,13 +213,13 @@ def list_conversations(limit: int = 100) -> list[dict]:
                 ) AS last_message
             FROM chat_conversations c
             LEFT JOIN chat_messages m ON m.conversation_id = c.id
-            GROUP BY c.id, c.title, c.created_at, c.updated_at
+            GROUP BY c.id, c.title, c.llm_enabled, c.created_at, c.updated_at
             ORDER BY c.updated_at DESC, c.id DESC
             LIMIT ?
             """,
             (limit,),
         ).fetchall()
-    return [dict(row) for row in rows]
+    return [_parse_conversation_row(row) for row in rows]
 
 
 def delete_conversation(conversation_id: int) -> bool:
@@ -223,6 +239,44 @@ def delete_conversation(conversation_id: int) -> bool:
 def get_or_create_default_conversation_id() -> int:
     with db_conn() as conn:
         return _ensure_default_conversation(conn)
+
+
+def is_conversation_llm_enabled(conversation_id: int) -> bool:
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT llm_enabled FROM chat_conversations WHERE id = ?",
+            (conversation_id,),
+        ).fetchone()
+    if not row:
+        return True
+    return bool(row["llm_enabled"])
+
+
+def set_conversation_llm_enabled(conversation_id: int, enabled: bool) -> Optional[dict]:
+    now = _utc_now_iso()
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT id FROM chat_conversations WHERE id = ?",
+            (conversation_id,),
+        ).fetchone()
+        if not row:
+            return None
+
+        conn.execute(
+            "UPDATE chat_conversations SET llm_enabled = ?, updated_at = ? WHERE id = ?",
+            (1 if enabled else 0, now, conversation_id),
+        )
+        updated = conn.execute(
+            "SELECT id, title, llm_enabled, created_at, updated_at FROM chat_conversations WHERE id = ?",
+            (conversation_id,),
+        ).fetchone()
+    return _parse_conversation_row(updated) if updated else None
+
+
+def _parse_conversation_row(row: sqlite3.Row) -> dict:
+    conversation = dict(row)
+    conversation["llm_enabled"] = bool(conversation.get("llm_enabled", 1))
+    return conversation
 
 
 def _touch_conversation(conn: sqlite3.Connection, conversation_id: int) -> None:

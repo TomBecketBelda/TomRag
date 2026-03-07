@@ -7,6 +7,7 @@ const historyList = document.getElementById("history-list");
 const userSelect = document.getElementById("user-select");
 const registerUserBtn = document.getElementById("register-user");
 const deleteUserBtn = document.getElementById("delete-user");
+const toggleLlmBtn = document.getElementById("toggle-llm");
 
 let conversations = [];
 let currentConversationId = null;
@@ -27,8 +28,12 @@ function addMsg(role, text, fuentes, isUser = false) {
 }
 
 function renderChat(messages) {
+  const currentConversation = getCurrentConversation();
+  const llmEnabled = !currentConversation || currentConversation.llm_enabled !== false;
   chat.innerHTML = "";
   for (const m of messages) {
+    const author = String(m.user_name || "").trim().toLowerCase();
+    if (!llmEnabled && author === "llm") continue;
     const isUser = m.role === "user";
     const role = m.user_name || (isUser ? "Usuario" : "Asistente");
     addMsg(role, m.content || "", m.sources || [], isUser);
@@ -69,7 +74,8 @@ function renderConversations() {
     meta.className = "history-meta";
     const date = c.updated_at ? new Date(c.updated_at).toLocaleString() : "";
     const count = Number(c.message_count || 0);
-    meta.textContent = (c.title || "Nuevo chat") + " - " + count + " msg" + (date ? " - " + date : "");
+    const llmTag = c.llm_enabled === false ? " - LLM OFF" : "";
+    meta.textContent = (c.title || "Nuevo chat") + " - " + count + " msg" + llmTag + (date ? " - " + date : "");
     head.appendChild(meta);
 
     const deleteBtn = document.createElement("button");
@@ -135,6 +141,24 @@ async function deleteConversationById(conversationId) {
   return data;
 }
 
+async function setConversationLlm(conversationId, enabled) {
+  const r = await fetch("/api/conversations/" + encodeURIComponent(conversationId) + "/llm", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled })
+  });
+  let data = {};
+  try {
+    data = await r.json();
+  } catch (_) {
+    data = {};
+  }
+  if (!r.ok || !data.conversation) {
+    throw new Error(data.error || ("Error HTTP " + r.status));
+  }
+  return data.conversation;
+}
+
 async function fetchHistory(conversationId) {
   if (typeof conversationId !== "number") return [];
   try {
@@ -150,11 +174,13 @@ async function fetchHistory(conversationId) {
 async function refreshConversations() {
   conversations = await fetchConversations();
   renderConversations();
+  syncLlmButton();
 }
 
 async function selectConversation(conversationId) {
   currentConversationId = conversationId;
   renderConversations();
+  syncLlmButton();
   const messages = await fetchHistory(conversationId);
   renderChat(messages);
 }
@@ -180,7 +206,27 @@ async function ensureConversationSelected() {
     currentConversationId = conversations[0].id;
   }
   renderConversations();
+  syncLlmButton();
   await selectConversation(currentConversationId);
+}
+
+function getCurrentConversation() {
+  return conversations.find((c) => c.id === currentConversationId) || null;
+}
+
+function syncLlmButton() {
+  if (!toggleLlmBtn) return;
+  const currentConversation = getCurrentConversation();
+  if (!currentConversation) {
+    toggleLlmBtn.disabled = true;
+    toggleLlmBtn.textContent = "Desactivar LLM";
+    toggleLlmBtn.classList.remove("is-off");
+    return;
+  }
+  const enabled = currentConversation.llm_enabled !== false;
+  toggleLlmBtn.disabled = false;
+  toggleLlmBtn.textContent = enabled ? "Desactivar LLM" : "Activar LLM";
+  toggleLlmBtn.classList.toggle("is-off", !enabled);
 }
 
 async function deleteConversation(conversationId) {
@@ -250,6 +296,9 @@ form.addEventListener("submit", async (e) => {
       currentConversationId = data.conversation_id;
     }
     await syncCurrentConversation();
+    if (data.llm_enabled === false) {
+      addMsg("Asistente", "LLM desactivado en esta conversación. Solo se ha guardado tu mensaje.", []);
+    }
   } catch (err) {
     addMsg("Sistema", "Error de red o del servidor: " + (err?.message || err), []);
   }
@@ -281,6 +330,25 @@ newChatBtn.addEventListener("click", async () => {
     addMsg("Asistente", "No se pudo crear un nuevo chat: " + (err?.message || err), []);
   }
 });
+
+if (toggleLlmBtn) {
+  toggleLlmBtn.addEventListener("click", async () => {
+    const currentConversation = getCurrentConversation();
+    if (!currentConversation) return;
+    const nextEnabled = currentConversation.llm_enabled === false;
+    try {
+      const updated = await setConversationLlm(currentConversation.id, nextEnabled);
+      conversations = conversations.map((c) => (c.id === updated.id ? { ...c, ...updated } : c));
+      renderConversations();
+      syncLlmButton();
+      const messages = await fetchHistory(updated.id);
+      renderChat(messages);
+      addMsg("Asistente", nextEnabled ? "LLM activado para esta conversación." : "LLM desactivado para esta conversación.", []);
+    } catch (err) {
+      addMsg("Sistema", "No se pudo cambiar el estado del LLM: " + (err?.message || err), []);
+    }
+  });
+}
 
 (async () => {
   await userManager.ensureUserSelected();
