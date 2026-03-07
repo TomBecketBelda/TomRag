@@ -28,12 +28,8 @@ function addMsg(role, text, fuentes, isUser = false) {
 }
 
 function renderChat(messages) {
-  const currentConversation = getCurrentConversation();
-  const llmEnabled = !currentConversation || currentConversation.llm_enabled !== false;
   chat.innerHTML = "";
   for (const m of messages) {
-    const author = String(m.user_name || "").trim().toLowerCase();
-    if (!llmEnabled && author === "llm") continue;
     const isUser = m.role === "user";
     const role = m.user_name || (isUser ? "Usuario" : "Asistente");
     addMsg(role, m.content || "", m.sources || [], isUser);
