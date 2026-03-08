@@ -39,6 +39,16 @@
         <button type="button" id="delete-user">Borrar usuario</button>
         <button type="button" id="toggle-llm">Desactivar LLM</button>
       </div>
+      <section id="emotion-meter" class="emotion-meter" aria-live="polite">
+        <div class="emotion-meter-head">
+          <strong>Medidor emocional (último mensaje real)</strong>
+          <span id="emotion-meter-label">Sin datos</span>
+        </div>
+        <div class="emotion-meter-track">
+          <div id="emotion-meter-fill" class="emotion-meter-fill" style="width: 0%;"></div>
+        </div>
+        <small id="emotion-meter-meta">Esperando mensajes de usuario...</small>
+      </section>
       <div id="chat"></div>
       <form id="f">
         <input id="q" placeholder="Escribe tu pregunta..." autocomplete="off" />

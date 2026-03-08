@@ -121,6 +121,7 @@ By default, Flask runs on:
 - `POST /api/users`: create user.
 - `DELETE /api/users/<id>`: delete user (except protected `LLM` user).
 - `POST /api/chat`: legacy endpoint to ask and receive answer + sources.
+- `GET /api/emotion-meter/last?conversation_id=<id>`: emotion meter for the last real user message (2-step LangGraph flow: classify + mediate).
 
 ## Internet Fallback (When RAG Has No Context)
 

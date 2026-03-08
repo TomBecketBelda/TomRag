@@ -15,6 +15,7 @@ from .chat_history_db import (
     set_conversation_llm_enabled,
 )
 from .chat_rag import generar_respuesta
+from .emotion_meter_service import build_last_message_emotion_meter
 
 
 def register_chat_routes(app) -> None:
@@ -136,6 +137,15 @@ def register_chat_routes(app) -> None:
             "conversation_id": conversation_id,
             "messages": load_history(conversation_id=conversation_id),
         })
+
+    @app.route("/api/emotion-meter/last", methods=["GET"])
+    def api_emotion_meter_last():
+        """Calcula el medidor emocional del último mensaje de un usuario real."""
+        conversation_id = request.args.get("conversation_id", default=None, type=int)
+        payload = build_last_message_emotion_meter(conversation_id=conversation_id)
+        if not payload.get("ok"):
+            return jsonify(payload), 404
+        return jsonify(payload)
 
     @app.route("/api/history", methods=["DELETE"])
     def api_history_delete():

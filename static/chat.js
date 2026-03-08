@@ -8,10 +8,54 @@ const userSelect = document.getElementById("user-select");
 const registerUserBtn = document.getElementById("register-user");
 const deleteUserBtn = document.getElementById("delete-user");
 const toggleLlmBtn = document.getElementById("toggle-llm");
+const emotionMeterLabel = document.getElementById("emotion-meter-label");
+const emotionMeterFill = document.getElementById("emotion-meter-fill");
+const emotionMeterMeta = document.getElementById("emotion-meter-meta");
 
 let conversations = [];
 let currentConversationId = null;
 let lastRenderedMessageId = null;
+
+function resetEmotionMeter(text = "Sin datos") {
+  if (emotionMeterLabel) emotionMeterLabel.textContent = text;
+  if (emotionMeterFill) emotionMeterFill.style.width = "0%";
+  if (emotionMeterMeta) emotionMeterMeta.textContent = "Esperando mensajes de usuario...";
+}
+
+function renderEmotionMeter(payload) {
+  const meter = payload?.emotion_meter || {};
+  const score = Math.max(0, Math.min(100, Number(meter.score || 0)));
+  const emotion = String(meter.emotion || "neutral");
+  const label = String(meter.label || "medio");
+  const confidence = Number(meter.confidence || 0);
+  const userName = payload?.message?.user_name || "Usuario";
+  if (emotionMeterFill) emotionMeterFill.style.width = score + "%";
+  if (emotionMeterLabel) {
+    emotionMeterLabel.textContent = emotion + " · " + score + "% (" + label + ")";
+  }
+  if (emotionMeterMeta) {
+    const confPct = Math.round(confidence * 100);
+    emotionMeterMeta.textContent = "Último mensaje de " + userName + " · confianza: " + confPct + "%";
+  }
+}
+
+async function refreshEmotionMeter() {
+  if (!currentConversationId) {
+    resetEmotionMeter();
+    return;
+  }
+  try {
+    const r = await fetch("/api/emotion-meter/last?conversation_id=" + encodeURIComponent(currentConversationId));
+    const data = await r.json();
+    if (!r.ok || !data.ok) {
+      resetEmotionMeter("Sin datos");
+      return;
+    }
+    renderEmotionMeter(data);
+  } catch (_) {
+    resetEmotionMeter("Sin datos");
+  }
+}
 
 // Añade un mensaje al panel de chat y, si existen, muestra sus fuentes.
 function addMsg(role, text, fuentes, isUser = false) {
@@ -192,6 +236,7 @@ async function selectConversation(conversationId) {
   syncLlmButton();
   const messages = await fetchHistory(conversationId);
   renderChat(messages);
+  await refreshEmotionMeter();
 }
 
 // Sincroniza el chat actual solo si detecta mensajes nuevos.
@@ -204,6 +249,7 @@ async function syncCurrentConversation() {
     // Solo re-renderizamos cuando cambia el último mensaje para reducir parpadeos.
     renderChat(messages);
     await refreshConversations();
+    await refreshEmotionMeter();
   }
 }
 
@@ -314,6 +360,7 @@ form.addEventListener("submit", async (e) => {
       currentConversationId = data.conversation_id;
     }
     await syncCurrentConversation();
+    await refreshEmotionMeter();
     if (data.llm_enabled === false) {
       addMsg("Asistente", "LLM desactivado en esta conversación. Solo se ha guardado tu mensaje.", []);
     }
@@ -334,6 +381,7 @@ clearBtn.addEventListener("click", async () => {
       // Mostramos confirmación como mensaje del sistema en el propio chat.
       addMsg("Asistente", "Chat limpiado.", []);
       await refreshConversations();
+      await refreshEmotionMeter();
     }
   } catch (_) {}
 });
@@ -345,6 +393,7 @@ newChatBtn.addEventListener("click", async () => {
     await refreshConversations();
     renderChat([]);
     renderConversations();
+    resetEmotionMeter();
   } catch (err) {
     addMsg("Asistente", "No se pudo crear un nuevo chat: " + (err?.message || err), []);
   }
@@ -363,6 +412,7 @@ if (toggleLlmBtn) {
       syncLlmButton();
       const messages = await fetchHistory(updated.id);
       renderChat(messages);
+      await refreshEmotionMeter();
       addMsg("Asistente", nextEnabled ? "LLM activado para esta conversación." : "LLM desactivado para esta conversación.", []);
     } catch (err) {
       addMsg("Sistema", "No se pudo cambiar el estado del LLM: " + (err?.message || err), []);
