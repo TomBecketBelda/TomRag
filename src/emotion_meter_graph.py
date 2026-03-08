@@ -79,7 +79,7 @@ def _clasificar_texto_llm(message: str) -> EmotionProfile | None:
                 {"role": "user", "content": prompt},
             ],
             max_tokens=140,
-            temperature=0.1,
+            temperature=8,
             stop=["<|eot_id|>"],
         )["choices"][0]["message"]["content"].strip()
         data = _parse_json_object(raw)
