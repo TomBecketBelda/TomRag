@@ -31,6 +31,31 @@ It is useful when you want a private/local assistant that:
 6. Messages are saved to `data/chat_history.db` by conversation and user.
 7. If LLM is disabled for a conversation, user messages are still saved but no new LLM response is generated.
 
+## Architecture Diagram
+
+```mermaid
+flowchart LR
+  U[Browser UI<br/>chat.html + chat.js + chat-users.js] -->|HTTP| F[Flask App<br/>run_flask.py + src/app_flask.py]
+
+  F --> R[src/chat_routes.py<br/>API routes]
+
+  R --> DB[src/chat_history_db.py]
+  DB --> SQ[(SQLite<br/>data/chat_history.db)]
+
+  R --> C[src/chat_rag.py]
+  C --> CH[(ChromaDB<br/>vectordb/)]
+  C --> GGUF[(Llama GGUF<br/>modelos/*.gguf)]
+  C --> WEB[[Web fallback APIs]]
+
+  R --> E[src/emotion_meter_service.py]
+  E --> G[src/emotion_meter_graph.py<br/>LangGraph 2-step]
+  G --> S1[Step 1: Emotion Classifier]
+  G --> S2[Step 2: Meter Mediator]
+
+  I[src/indexar.py] --> DOCS[(documentos/*.txt, *.pdf)]
+  I --> CH
+```
+
 ## Project Structure
 
 - `run_flask.py`: app entrypoint (initializes DB + model, starts Flask).
