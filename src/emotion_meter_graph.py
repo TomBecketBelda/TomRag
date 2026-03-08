@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from typing import TypedDict
 
 from langgraph.graph import END, StateGraph
+
+from . import chat_rag
 
 
 class EmotionState(TypedDict, total=False):
@@ -41,6 +44,101 @@ _METER_BY_EMOTION: dict[str, tuple[int, str]] = {
 
 
 def _clasificar_texto(message: str) -> EmotionProfile:
+    profile_llm = _clasificar_texto_llm(message)
+    if profile_llm is not None:
+        return profile_llm
+    return _clasificar_texto_heuristico(message)
+
+
+def _clasificar_texto_llm(message: str) -> EmotionProfile | None:
+    texto = (message or "").strip()
+    if not texto:
+        return EmotionProfile("neutral", 0.0, "Mensaje vacío")
+
+    try:
+        if chat_rag.llm is None:
+            # Evita inicializaciones pesadas o accesos de red en este flujo.
+            # En producción `run_flask.py` ya precarga el modelo.
+            return None
+
+        prompt = (
+            "Clasifica la emoción principal del texto del usuario. "
+            "Responde SOLO en JSON válido con las claves: emotion, confidence, rationale. "
+            "emotion debe ser una de: alegria, tristeza, enojo, miedo, calma, neutral. "
+            "confidence debe ser un número entre 0 y 1.\n\n"
+            f"Texto: {texto}"
+        )
+        raw = chat_rag.llm.create_chat_completion(
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Eres un clasificador emocional. No des explicaciones fuera del JSON."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            max_tokens=140,
+            temperature=0.1,
+            stop=["<|eot_id|>"],
+        )["choices"][0]["message"]["content"].strip()
+        data = _parse_json_object(raw)
+        if not isinstance(data, dict):
+            return None
+
+        emotion = _normalizar_emocion(data.get("emotion"))
+        confidence = _normalizar_confianza(data.get("confidence"))
+        rationale = str(data.get("rationale") or "Clasificación estimada por LLM").strip()
+        return EmotionProfile(emotion, confidence, rationale)
+    except Exception:
+        # Si el modelo no está disponible o falla el parseo, degradamos a heurística.
+        return None
+
+
+def _parse_json_object(raw: str) -> dict | None:
+    if not raw:
+        return None
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, dict) else None
+    except Exception:
+        pass
+
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        parsed = json.loads(raw[start : end + 1])
+        return parsed if isinstance(parsed, dict) else None
+    except Exception:
+        return None
+
+
+def _normalizar_emocion(value: object) -> str:
+    emotion = str(value or "").strip().lower()
+    mapping = {
+        "alegría": "alegria",
+        "tristeza": "tristeza",
+        "enojo": "enojo",
+        "enfado": "enojo",
+        "ira": "enojo",
+        "miedo": "miedo",
+        "calma": "calma",
+        "neutral": "neutral",
+    }
+    return mapping.get(emotion, "neutral")
+
+
+def _normalizar_confianza(value: object) -> float:
+    try:
+        conf = float(value)
+    except Exception:
+        conf = 0.5
+    return max(0.0, min(1.0, conf))
+
+
+def _clasificar_texto_heuristico(message: str) -> EmotionProfile:
     texto = (message or "").strip().lower()
     if not texto:
         return EmotionProfile("neutral", 0.0, "Mensaje vacío")
